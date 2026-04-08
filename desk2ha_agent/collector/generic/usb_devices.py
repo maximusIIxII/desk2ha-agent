@@ -43,23 +43,24 @@ _SKIP_VID_PIDS = {
 }
 
 # Known VID:PID → friendly name + manufacturer
+# Model names should NOT include manufacturer (HA adds it automatically)
 _KNOWN_DEVICES: dict[str, tuple[str, str]] = {
-    "0B0E:24F1": ("Jabra Speak2 75", "Jabra"),
-    "0B0E:2483": ("Jabra Engage 50 II", "Jabra"),
-    "0B0E:245E": ("Jabra Evolve2 85", "Jabra"),
-    "0B0E:2466": ("Jabra Evolve2 75", "Jabra"),
-    "413C:C015": ("Dell Webcam WB7022", "Dell"),
-    "413C:C011": ("Dell Webcam WB5023", "Dell"),
-    "413C:2119": ("Dell Universal Receiver", "Dell"),
-    "413C:D001": ("Dell KM7321W Keyboard", "Dell"),
-    "046D:C900": ("Logitech Bolt Receiver", "Logitech"),
-    "046D:C548": ("Logitech Unifying Receiver", "Logitech"),
-    "046D:C52B": ("Logitech Unifying Receiver", "Logitech"),
-    "046D:0A87": ("Logitech Zone Wireless", "Logitech"),
-    "1532:0084": ("Razer DeathAdder V2", "Razer"),
-    "1532:026F": ("Razer Huntsman V3", "Razer"),
-    "1038:12AD": ("SteelSeries Arctis Nova 7", "SteelSeries"),
-    "1B1C:1B65": ("Corsair HS80 RGB", "Corsair"),
+    "0B0E:24F1": ("Speak2 75", "Jabra"),
+    "0B0E:2483": ("Engage 50 II", "Jabra"),
+    "0B0E:245E": ("Evolve2 85", "Jabra"),
+    "0B0E:2466": ("Evolve2 75", "Jabra"),
+    "413C:C015": ("Webcam WB7022", "Dell"),
+    "413C:C011": ("Webcam WB5023", "Dell"),
+    "413C:2119": ("Universal Receiver", "Dell"),
+    "413C:D001": ("KM7321W Keyboard", "Dell"),
+    "046D:C900": ("Bolt Receiver", "Logitech"),
+    "046D:C548": ("Unifying Receiver", "Logitech"),
+    "046D:C52B": ("Unifying Receiver", "Logitech"),
+    "046D:0A87": ("Zone Wireless", "Logitech"),
+    "1532:0084": ("DeathAdder V2", "Razer"),
+    "1532:026F": ("Huntsman V3", "Razer"),
+    "1038:12AD": ("Arctis Nova 7", "SteelSeries"),
+    "1B1C:1B65": ("HS80 RGB", "Corsair"),
 }
 
 
