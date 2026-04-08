@@ -39,9 +39,11 @@ _THERMAL_KEY_MAP: dict[str, str] = {
     "ssd": "ssd",
     "gpu": "gpu",
     "pch": "pch",
+    "nb": "northbridge",
     "battery": "battery_temp",
     "skin": "skin",
     "charger": "charger",
+    "other": "misc",
 }
 
 
@@ -228,7 +230,7 @@ class DellDcmCollector(Collector):
                     continue
 
                 lower_name = name.lower()
-                if "cpu" in lower_name:
+                if "cpu" in lower_name or "processor" in lower_name:
                     key = "fan.cpu"
                 elif "gpu" in lower_name or "video" in lower_name:
                     key = "fan.gpu"
