@@ -20,11 +20,11 @@ COLLECTOR_MODULES: list[str] = [
     "desk2ha_agent.collector.platform.windows",
     "desk2ha_agent.collector.platform.linux",
     "desk2ha_agent.collector.platform.macos",
-    # Generic (cross-platform) -- to be added
-    # "desk2ha_agent.collector.generic.ddcci",
-    # "desk2ha_agent.collector.generic.uvc",
-    # "desk2ha_agent.collector.generic.ble_battery",
-    # "desk2ha_agent.collector.generic.hid_battery",
+    # Generic (cross-platform)
+    "desk2ha_agent.collector.generic.ddcci",
+    "desk2ha_agent.collector.generic.uvc",
+    "desk2ha_agent.collector.generic.ble_battery",
+    "desk2ha_agent.collector.generic.hid_battery",
     # "desk2ha_agent.collector.generic.headsetcontrol",
     # "desk2ha_agent.collector.generic.usb_pd",
     # Vendor (lazy-loaded) -- to be added
