@@ -28,7 +28,6 @@ _LITRA_VIDS_PIDS: list[tuple[int, int]] = [
     (0x046D, 0xC900),  # Litra Glow
     (0x046D, 0xC901),  # Litra Beam
     (0x046D, 0xC903),  # Litra Beam LX
-    (0xFFFF, 0xBACE),  # Litra Glow (alternate ID seen on some systems)
 ]
 _USAGE_PAGE = 0xFF43  # Logitech vendor-specific
 
@@ -87,7 +86,7 @@ class LogitechLitraCollector(Collector):
                     if (
                         dev.get("vendor_id") == vid
                         and dev.get("product_id") == pid
-                        and (dev.get("usage_page") == _USAGE_PAGE or pid == 0xBACE)
+                        and dev.get("usage_page") == _USAGE_PAGE
                     ):
                         self._devices.append(dev)
                         break  # One per VID/PID pair
