@@ -557,7 +557,35 @@ class DDCCICollector(Collector):
             await asyncio.to_thread(self._set_power_state_sync, get_monitors, display_index, state)
             return {"status": "completed"}
 
+        # VCP-based toggle commands (Dell proprietary codes)
+        vcp_toggle_map = {
+            "display.set_auto_brightness": _VCP_AUTO_BRIGHTNESS,
+            "display.set_auto_color_temp": _VCP_AUTO_COLOR_TEMP,
+            "display.set_kvm": _VCP_KVM_SELECT,
+            "display.set_pbp_mode": _VCP_PBP_MODE,
+            "display.set_smart_hdr": _VCP_SMART_HDR,
+            "display.set_power_nap": _VCP_POWER_NAP,
+        }
+
+        if command in vcp_toggle_map:
+            vcp_code = vcp_toggle_map[command]
+            value = int(parameters.get("value", parameters.get("pc", parameters.get("mode", 0))))
+            await asyncio.to_thread(
+                self._set_vcp_sync, get_monitors, display_index, vcp_code, value
+            )
+            return {"status": "completed"}
+
         raise NotImplementedError(f"Unknown command: {command}")
+
+    @staticmethod
+    def _set_vcp_sync(
+        get_monitors: Any, display_index: int, vcp_code: int, value: int
+    ) -> None:
+        monitors = get_monitors()
+        if display_index >= len(monitors):
+            raise ValueError(f"Display index {display_index} out of range")
+        with monitors[display_index]:
+            monitors[display_index].vcp.set_vcp_feature(vcp_code, value)
 
     @staticmethod
     def _set_brightness_sync(get_monitors: Any, display_index: int, value: int) -> None:
