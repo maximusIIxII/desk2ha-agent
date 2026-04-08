@@ -37,9 +37,19 @@ _SKIP_VIDS = {
 
 # VID:PID pairs handled by dedicated collectors (skip in USB enum)
 _SKIP_VID_PIDS = {
-    "046D:C900",  # Logitech Litra Glow (logitech_litra collector)
-    "046D:C901",  # Logitech Litra Beam
-    "FFFF:BACE",  # Logitech Litra Glow (G HUB virtual device)
+    # Logitech Litra (logitech_litra collector)
+    "046D:C900",  # Litra Glow
+    "046D:C901",  # Litra Beam
+    "FFFF:BACE",  # Litra Glow (G HUB virtual device)
+    # Wireless receivers (wireless_receiver collector)
+    "413C:2119",  # Dell Universal Receiver
+    "413C:2141",  # Dell Universal Receiver v2
+    "046D:C548",  # Logitech Bolt Receiver
+    "046D:C52B",  # Logitech Unifying Receiver
+    "046D:C534",  # Logitech Nano Receiver
+    "046D:C545",  # Logitech Lightspeed Receiver
+    "0B0E:245D",  # Jabra Link 380
+    "0B0E:2481",  # Jabra Link 390
 }
 
 # Known VID:PID → friendly name + manufacturer
