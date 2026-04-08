@@ -274,19 +274,62 @@ class HttpTransport(Transport):
         )
 
     async def _handle_commands_list(self, _request: web.Request) -> web.Response:
-        """GET /v1/commands -- list available commands (stub)."""
-        resp = {
-            "schema_version": SCHEMA_VERSION,
-            "agent_version": __version__,
-            "commands": [],
-        }
-        return web.json_response(resp)
-
-    async def _handle_commands_execute(self, _request: web.Request) -> web.Response:
-        """POST /v1/commands -- execute a command (stub)."""
+        """GET /v1/commands -- list available commands."""
+        commands = []
+        for collector in self._scheduler.collectors:
+            caps = collector.meta.capabilities
+            if "control" in caps or "display" in caps:
+                commands.append(
+                    {
+                        "collector": collector.meta.name,
+                        "capabilities": sorted(collector.meta.capabilities),
+                    }
+                )
         return web.json_response(
-            {"error": "not_implemented", "message": "Command execution not yet available"},
-            status=501,
+            {
+                "schema_version": SCHEMA_VERSION,
+                "agent_version": __version__,
+                "commands": commands,
+            }
+        )
+
+    async def _handle_commands_execute(self, request: web.Request) -> web.Response:
+        """POST /v1/commands -- execute a command."""
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response(
+                {"error": "bad_request", "message": "Invalid JSON body"},
+                status=400,
+            )
+
+        command = body.get("command", "")
+        target = body.get("target", "")
+        parameters = body.get("parameters", {})
+
+        if not command:
+            return web.json_response(
+                {"error": "bad_request", "message": "Missing 'command' field"},
+                status=400,
+            )
+
+        # Route to the right collector
+        for collector in self._scheduler.collectors:
+            try:
+                result = await collector.execute_command(command, target, parameters)
+                return web.json_response(result)
+            except NotImplementedError:
+                continue
+            except Exception as exc:
+                logger.exception("Command %s failed on %s", command, collector.meta.name)
+                return web.json_response(
+                    {"error": "command_failed", "message": str(exc)},
+                    status=500,
+                )
+
+        return web.json_response(
+            {"error": "not_found", "message": f"No collector handles command: {command}"},
+            status=404,
         )
 
     async def _handle_commands_status(self, request: web.Request) -> web.Response:
