@@ -80,6 +80,8 @@ class HttpTransport(Transport):
         app.router.add_get("/v1/commands", self._handle_commands_list)
         app.router.add_post("/v1/commands", self._handle_commands_execute)
         app.router.add_get("/v1/commands/{command_id}", self._handle_commands_status)
+        app.router.add_get("/v1/update/check", self._handle_update_check)
+        app.router.add_post("/v1/update/install", self._handle_update_install)
         return app
 
     @property
@@ -294,6 +296,22 @@ class HttpTransport(Transport):
             {"error": "not_found", "message": f"Command {command_id} not found"},
             status=404,
         )
+
+    async def _handle_update_check(self, _request: web.Request) -> web.Response:
+        """GET /v1/update/check -- check for agent updates on GitHub."""
+        from desk2ha_agent.lifecycle.version_check import check_for_update
+
+        result = await check_for_update()
+        return web.json_response(result)
+
+    async def _handle_update_install(self, request: web.Request) -> web.Response:
+        """POST /v1/update/install -- install an agent update."""
+        from desk2ha_agent.lifecycle.self_update import self_update
+
+        body = await request.json() if request.content_length else {}
+        version = body.get("version")
+        result = await self_update(version=version)
+        return web.json_response(result)
 
     def _build_config_summary(self) -> dict[str, Any]:
         """Build a redacted config summary for info/config endpoints."""
