@@ -313,6 +313,20 @@ class HttpTransport(Transport):
                 status=400,
             )
 
+        # Agent-level commands (not routed to collectors)
+        if command == "agent.restart":
+            from desk2ha_agent.lifecycle.service_manager import restart_service
+
+            result = await restart_service()
+            return web.json_response(result)
+
+        if command == "agent.update":
+            from desk2ha_agent.lifecycle.self_update import self_update
+
+            version = parameters.get("version")
+            result = await self_update(version=version)
+            return web.json_response(result)
+
         # Route to the right collector
         for collector in self._scheduler.collectors:
             try:
