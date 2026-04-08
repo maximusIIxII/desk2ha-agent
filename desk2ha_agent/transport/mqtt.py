@@ -224,6 +224,30 @@ _SENSOR_DEFS: dict[str, dict[str, str]] = {
     },
 }
 
+# Display control keys — handled by _publish_control_discovery, skip as sensors
+_DISPLAY_CONTROL_KEYS = {
+    "brightness_percent",
+    "contrast_percent",
+    "volume",
+    "input_source",
+    "power_state",
+    "kvm_active_pc",
+    "pbp_mode",
+}
+
+
+def _auto_name(metric_key: str) -> str:
+    """Generate a human-readable name from a metric key."""
+    parts = metric_key.split(".")
+    if len(parts) >= 2 and parts[0] in ("system", "agent", "power"):
+        name_part = ".".join(parts[1:])
+    elif len(parts) >= 3 and parts[0] in ("display", "peripheral", "audio"):
+        suffix = " ".join(p.replace("_", " ").title() for p in parts[2:])
+        return f"{parts[0].title()} {parts[1]} {suffix}"
+    else:
+        name_part = metric_key
+    return name_part.replace("_", " ").replace(".", " ").title()
+
 
 class MqttTransport(Transport):
     """Publishes metrics to MQTT with HA Discovery payloads."""
@@ -326,11 +350,7 @@ class MqttTransport(Transport):
         client.subscribe(cmd_topic, qos=1)
         logger.info("MQTT subscribed to %s", cmd_topic)
 
-        # Publish discovery on first connect
-        if not self._discovery_published:
-            self._publish_ha_discovery()
-            self._publish_control_discovery()
-            self._discovery_published = True
+        # Discovery is published on first state update (when metrics are available)
 
     def _on_disconnect(
         self,
@@ -351,6 +371,12 @@ class MqttTransport(Transport):
         """Called by StateCache when metrics are updated."""
         if not self._connected or self._client is None:
             return
+
+        # Publish discovery on first state update (metrics now available)
+        if not self._discovery_published and metrics:
+            self._publish_ha_discovery(metrics)
+            self._publish_control_discovery(metrics)
+            self._discovery_published = True
 
         device_key = self._get_device_key()
         state_topic = self._topic("state")
@@ -394,8 +420,8 @@ class MqttTransport(Transport):
 
         return block
 
-    def _publish_ha_discovery(self) -> None:
-        """Publish HA MQTT Discovery config messages for all known sensors."""
+    def _publish_ha_discovery(self, metrics: dict[str, Any]) -> None:
+        """Publish HA MQTT Discovery for metrics actually present in state."""
         if self._client is None:
             return
 
@@ -404,31 +430,36 @@ class MqttTransport(Transport):
         avail_topic = self._topic("availability")
         state_topic = self._topic("state")
         device_block = self._build_device_block()
+        count = 0
 
-        for metric_key, sensor_def in _SENSOR_DEFS.items():
+        for metric_key in metrics:
+            # Skip display control keys (handled by _publish_control_discovery)
+            suffix = metric_key.rsplit(".", 1)[-1]
+            if suffix in _DISPLAY_CONTROL_KEYS:
+                continue
+
+            sensor_def = _SENSOR_DEFS.get(metric_key)
+            name = sensor_def["name"] if sensor_def else _auto_name(metric_key)
             object_id = f"desk2ha_{device_key}_{metric_key}".replace(".", "_")
             config_topic = f"{prefix}/sensor/{object_id}/config"
 
             config_payload: dict[str, Any] = {
-                "name": sensor_def["name"],
+                "name": name,
                 "unique_id": object_id,
                 "state_topic": state_topic,
-                "value_template": f"{{{{ value_json['{metric_key}']['value'] }}}}",
+                "value_template": (
+                    f"{{{{ value_json['{metric_key}']['value'] }}}}"
+                ),
                 "availability_topic": avail_topic,
                 "payload_available": "online",
                 "payload_not_available": "offline",
                 "device": device_block,
             }
 
-            # Add optional fields
-            for opt_field in (
-                "device_class",
-                "unit_of_measurement",
-                "state_class",
-                "icon",
-            ):
-                if opt_field in sensor_def:
-                    config_payload[opt_field] = sensor_def[opt_field]
+            if sensor_def:
+                for field in ("device_class", "unit_of_measurement", "state_class", "icon"):
+                    if field in sensor_def:
+                        config_payload[field] = sensor_def[field]
 
             try:
                 self._client.publish(
@@ -437,19 +468,24 @@ class MqttTransport(Transport):
                     qos=1,
                     retain=True,
                 )
-                logger.debug("Published discovery for %s", metric_key)
+                count += 1
             except Exception:
                 logger.debug("Failed to publish discovery for %s", metric_key, exc_info=True)
 
         logger.info(
             "Published HA MQTT Discovery for %d sensors on device %s",
-            len(_SENSOR_DEFS),
+            count,
             device_key,
         )
 
-    def _publish_control_discovery(self) -> None:
-        """Publish HA MQTT Discovery for generic display control entities."""
+    def _publish_control_discovery(self, metrics: dict[str, Any]) -> None:
+        """Publish HA MQTT Discovery for display control entities found in metrics."""
         if self._client is None:
+            return
+
+        # Only publish if display metrics exist
+        has_display = any(k.startswith("display.") for k in metrics)
+        if not has_display:
             return
 
         device_key = self._get_device_key()
