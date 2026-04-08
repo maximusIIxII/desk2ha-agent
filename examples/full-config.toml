@@ -1,0 +1,45 @@
+# Desk2HA Agent — Full Configuration
+# All options with their default values documented.
+
+[agent]
+# Device name override ("auto" uses hostname)
+device_name = "auto"
+
+[http]
+enabled = true
+bind = "0.0.0.0"
+port = 9693
+# Token for Bearer auth. Can also be set via DESK2HA_HTTP_TOKEN env var.
+auth_token = "CHANGE_ME_TO_A_RANDOM_TOKEN"
+
+[mqtt]
+enabled = false
+broker = "homeassistant.local"
+port = 1883
+username = "desk2ha"
+# Password can also be set via DESK2HA_MQTT_PASS env var.
+password = ""
+base_topic = "desk2ha"
+tls = false
+ha_discovery_prefix = "homeassistant"
+
+[collectors]
+# Collectors to disable (by name). All others auto-discover.
+disabled = []
+
+# Per-collector poll intervals in seconds (overrides defaults)
+[collectors.intervals]
+# windows = 30
+# linux = 30
+# macos = 30
+# ddcci = 60
+# hid_battery = 120
+# ble_battery = 120
+
+[collectors.ble_battery]
+enabled = false
+scan_duration = 5
+filter_known_only = true
+
+[logging]
+level = "INFO"
