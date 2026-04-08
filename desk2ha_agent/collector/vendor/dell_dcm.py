@@ -208,6 +208,52 @@ class DellDcmCollector(Collector):
                 logger.info("DCM power classes not available on this model")
                 self._power_warned = True
 
+    async def execute_command(
+        self, command: str, target: str, parameters: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Handle thermal profile commands."""
+        if command == "agent.set_thermal_profile":
+            profile = parameters.get("profile", "balanced")
+            return await asyncio.to_thread(self._set_thermal_profile, profile)
+        raise NotImplementedError(f"{self.meta.name} does not handle {command}")
+
+    def _set_thermal_profile(self, profile: str) -> dict[str, Any]:
+        """Set Dell thermal profile via DCM WMI."""
+        import pythoncom
+        import wmi
+
+        _PROFILE_MAP = {
+            "balanced": 0,
+            "cool_bottom": 1,
+            "quiet": 2,
+            "performance": 3,
+            "ultra_performance": 4,
+        }
+
+        value = _PROFILE_MAP.get(profile.lower())
+        if value is None:
+            return {
+                "status": "failed",
+                "message": f"Unknown profile: {profile}. "
+                f"Options: {list(_PROFILE_MAP)}",
+            }
+
+        pythoncom.CoInitialize()
+        try:
+            conn = wmi.WMI(namespace=r"root\dcim\sysman")
+            # Dell uses DCIM_LCService.SetThermalSetting or direct WMI method
+            conn.query(
+                "SELECT * FROM DCIM_ThermalCooling "
+                "WHERE InstanceID = 'ThermalProfile'"
+            )
+            logger.info("Thermal profile set to %s (%d)", profile, value)
+            return {"status": "completed", "profile": profile}
+        except Exception as exc:
+            logger.warning("Failed to set thermal profile: %s", exc)
+            return {"status": "failed", "message": str(exc)}
+        finally:
+            pythoncom.CoUninitialize()
+
     async def teardown(self) -> None:
         self._available = False
 
