@@ -102,8 +102,8 @@ def test_collect_fans_processor_name():
     metrics: dict = {}
     c._collect_fans(mock_conn, metrics, 0.0)
 
-    # "Processor" doesn't contain "cpu" → falls through to fan.0
-    assert metrics["fan.0"]["value"] == 1788.0
+    # "Processor" matches "processor" pattern → fan.cpu
+    assert metrics["fan.cpu"]["value"] == 1788.0
 
 
 def test_collect_power():
