@@ -35,6 +35,13 @@ _SKIP_VIDS = {
     "27C6",  # Goodix fingerprint
 }
 
+# VID:PID pairs handled by dedicated collectors (skip in USB enum)
+_SKIP_VID_PIDS = {
+    "046D:C900",  # Logitech Litra Glow (logitech_litra collector)
+    "046D:C901",  # Logitech Litra Beam
+    "FFFF:BACE",  # Logitech Litra Glow (G HUB virtual device)
+}
+
 # Known VID:PID → friendly name + manufacturer
 _KNOWN_DEVICES: dict[str, tuple[str, str]] = {
     "0B0E:24F1": ("Jabra Speak2 75", "Jabra"),
@@ -49,13 +56,25 @@ _KNOWN_DEVICES: dict[str, tuple[str, str]] = {
     "046D:C548": ("Logitech Unifying Receiver", "Logitech"),
     "046D:C52B": ("Logitech Unifying Receiver", "Logitech"),
     "046D:0A87": ("Logitech Zone Wireless", "Logitech"),
-    "FFFF:BACE": ("Logitech Litra Glow", "Logitech"),
-    "0424:7260": ("Microchip USB Hub (Monitor)", "Microchip"),
     "1532:0084": ("Razer DeathAdder V2", "Razer"),
     "1532:026F": ("Razer Huntsman V3", "Razer"),
     "1038:12AD": ("SteelSeries Arctis Nova 7", "SteelSeries"),
     "1B1C:1B65": ("Corsair HS80 RGB", "Corsair"),
 }
+
+
+_GENERIC_NAMES = {
+    "usb-eingabe",
+    "usb-verbund",
+    "usb input",
+    "usb composite",
+}
+
+
+def _is_generic_name(name: str) -> bool:
+    """Check if USB device name is generic/unhelpful."""
+    lower = name.lower()
+    return any(g in lower for g in _GENERIC_NAMES)
 
 
 class USBDeviceCollector(Collector):
@@ -132,13 +151,15 @@ class USBDeviceCollector(Collector):
 
                 if vid.upper() in _SKIP_VIDS:
                     continue
+                vid_pid_key = f"{vid.upper()}:{pid.upper()}"
+                if vid_pid_key in _SKIP_VID_PIDS:
+                    continue
 
                 # Skip interface sub-devices (MI_01, MI_02, etc.)
                 if "&MI_" in did and not did.endswith("MI_00"):
                     continue
 
                 mfg = getattr(dev, "Manufacturer", "") or ""
-                vid_pid_key = f"{vid.upper()}:{pid.upper()}"
 
                 # Use known device lookup for friendly names
                 known = _KNOWN_DEVICES.get(vid_pid_key)
@@ -147,6 +168,10 @@ class USBDeviceCollector(Collector):
                 else:
                     friendly_name = name
                     friendly_mfg = mfg
+
+                # Skip remaining generic USB devices without known mapping
+                if not known and _is_generic_name(friendly_name):
+                    continue
 
                 # Skip generic Windows driver names as manufacturer
                 if friendly_mfg.startswith("(Standard"):
