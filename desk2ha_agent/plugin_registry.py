@@ -33,6 +33,7 @@ COLLECTOR_MODULES: list[str] = [
     "desk2ha_agent.collector.vendor.dell_dcm",
     "desk2ha_agent.collector.vendor.hp_wmi",
     "desk2ha_agent.collector.vendor.lenovo_wmi",
+    "desk2ha_agent.collector.vendor.logitech_litra",
 ]
 
 
