@@ -25,6 +25,7 @@ classifiers = [
 dependencies = [
     "aiohttp>=3.9",
     "paho-mqtt>=2.0",
+    "psutil>=5.9",
     "pydantic>=2.5",
     "monitorcontrol>=3.0",
     "hidapi>=0.14",
