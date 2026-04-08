@@ -270,17 +270,20 @@ class HttpTransport(Transport):
         return web.json_response(resp)
 
     async def _handle_image(self, request: web.Request) -> web.Response:
-        """GET /v1/image/{device_key} -- serve device icon SVG."""
-        from desk2ha_agent.images.device_icons import get_device_icon_svg
+        """GET /v1/image/{device_key} -- serve device icon SVG.
 
-        # Determine device type from info_provider
-        device_type = "notebook"  # default
+        Uses Tier 2 vendor-specific icons when manufacturer/model is known,
+        falls back to Tier 1 generic device type icons.
+        """
+        from desk2ha_agent.images.vendor_icons import get_device_image
+
+        hw_info: dict[str, Any] = {"device_type": "notebook"}
         if self._info_provider is not None:
             hw = self._info_provider.get_hardware()
-            if hw and hw.get("device_type"):
-                device_type = hw["device_type"]
+            if hw:
+                hw_info = hw
 
-        svg = get_device_icon_svg(device_type)
+        svg = get_device_image(hw_info)
         return web.Response(
             text=svg,
             content_type="image/svg+xml",
