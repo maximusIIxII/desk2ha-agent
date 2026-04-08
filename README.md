@@ -127,6 +127,16 @@ The agent needs an interactive desktop session for DDC/CI monitor control. Use t
 %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\Desk2HA Agent.vbs
 ```
 
+## Known Issues
+
+| Issue | Workaround | Status |
+|-------|------------|--------|
+| **DDC/CI not working as Windows Service** | DDC/CI requires an interactive desktop session (Session 1+). Use Startup folder autostart, not NSSM/Windows Service. | By design (Windows limitation) |
+| **Dell Command Monitor v10.x WMI not available** | DCM v10.13 may not register the `root\dcim\sysman` WMI provider automatically. Ensure the `dcstor64` and `dcevt64` services are running. | Investigating |
+| **Bluetooth peripherals not detected** | Devices connected via Dell Universal Receiver (Bluetooth/RF) are not yet enumerated. Only direct USB devices are listed. | Planned |
+| **Duplicate devices after upgrade** | After upgrading from an older version, orphaned entity registry entries may create duplicate devices. Fix: delete the integration in HA and re-add it. | Known |
+| **Logitech Litra G HUB conflict** | If Logitech G HUB is running, it may hold the HID interface and prevent the agent from reading Litra status. | Close G HUB or disable Litra in G HUB |
+
 ## License
 
 Apache-2.0
