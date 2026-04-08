@@ -143,11 +143,7 @@ class WindowsPlatformCollector(Collector):
 
             # Network adapters for MAC addresses
             adapters = conn.Win32_NetworkAdapterConfiguration(IPEnabled=True)  # type: ignore[attr-defined]
-            macs = [
-                a.MACAddress.lower().replace("-", ":")
-                for a in adapters
-                if a.MACAddress
-            ]
+            macs = [a.MACAddress.lower().replace("-", ":") for a in adapters if a.MACAddress]
 
             serial = bios.SerialNumber if bios else None
             hostname = platform.node()
@@ -207,9 +203,7 @@ class WindowsPlatformCollector(Collector):
         except Exception:
             logger.exception("Failed to collect device identity")
 
-    def _collect_battery(
-        self, conn: object, metrics: dict[str, Any], now: float
-    ) -> None:
+    def _collect_battery(self, conn: object, metrics: dict[str, Any], now: float) -> None:
         """Query Win32_Battery for battery metrics."""
         try:
             batteries = conn.Win32_Battery()  # type: ignore[attr-defined]
@@ -221,9 +215,7 @@ class WindowsPlatformCollector(Collector):
             # Battery level
             level = getattr(bat, "EstimatedChargeRemaining", None)
             if level is not None:
-                metrics["battery.level_percent"] = metric_value(
-                    float(level), unit="%"
-                )
+                metrics["battery.level_percent"] = metric_value(float(level), unit="%")
 
             # Battery status mapping
             status_map = {
@@ -252,9 +244,7 @@ class WindowsPlatformCollector(Collector):
         except Exception:
             logger.exception("Failed to collect battery metrics")
 
-    def _collect_thermals_fallback(
-        self, metrics: dict[str, Any], now: float
-    ) -> None:
+    def _collect_thermals_fallback(self, metrics: dict[str, Any], now: float) -> None:
         """Query MSAcpi_ThermalZoneTemperature for basic CPU temp."""
         import wmi  # type: ignore[import-untyped]
 
@@ -273,23 +263,17 @@ class WindowsPlatformCollector(Collector):
                 metrics[key] = metric_value(celsius, unit="Cel")
         except Exception:
             if not self._thermal_fallback_warned:
-                logger.info(
-                    "MSAcpi_ThermalZoneTemperature not available (may need admin)"
-                )
+                logger.info("MSAcpi_ThermalZoneTemperature not available (may need admin)")
                 self._thermal_fallback_warned = True
 
     # --- System metrics (psutil + WMI static) ---
 
-    def _collect_system_metrics(
-        self, conn: object, metrics: dict[str, Any], now: float
-    ) -> None:
+    def _collect_system_metrics(self, conn: object, metrics: dict[str, Any], now: float) -> None:
         """Collect live psutil metrics and cached WMI static info."""
         self._collect_psutil_metrics(metrics, now)
         self._collect_wmi_static(conn, metrics, now)
 
-    def _collect_psutil_metrics(
-        self, metrics: dict[str, Any], now: float
-    ) -> None:
+    def _collect_psutil_metrics(self, metrics: dict[str, Any], now: float) -> None:
         """Collect cross-platform live metrics via psutil."""
         try:
             metrics["system.cpu_usage_percent"] = metric_value(
@@ -303,27 +287,19 @@ class WindowsPlatformCollector(Collector):
                 )
 
             vmem = psutil.virtual_memory()
-            metrics["system.ram_used_gb"] = metric_value(
-                round(vmem.used / 1024**3, 2), unit="GB"
-            )
+            metrics["system.ram_used_gb"] = metric_value(round(vmem.used / 1024**3, 2), unit="GB")
             metrics["system.ram_total_gb"] = metric_value(
                 round(vmem.total / 1024**3, 2), unit="GB"
             )
-            metrics["system.ram_usage_percent"] = metric_value(
-                vmem.percent, unit="%"
-            )
+            metrics["system.ram_usage_percent"] = metric_value(vmem.percent, unit="%")
 
             swap = psutil.swap_memory()
-            metrics["system.swap_usage_percent"] = metric_value(
-                swap.percent, unit="%"
-            )
+            metrics["system.swap_usage_percent"] = metric_value(swap.percent, unit="%")
 
             disk_path = "C:\\" if sys.platform == "win32" else "/"
             try:
                 disk = psutil.disk_usage(disk_path)
-                metrics["system.disk_usage_percent"] = metric_value(
-                    disk.percent, unit="%"
-                )
+                metrics["system.disk_usage_percent"] = metric_value(disk.percent, unit="%")
                 metrics["system.disk_free_gb"] = metric_value(
                     round(disk.free / 1024**3, 2), unit="GB"
                 )
@@ -348,15 +324,11 @@ class WindowsPlatformCollector(Collector):
         except Exception:
             logger.exception("Failed to collect psutil system metrics")
 
-    def _collect_wmi_static(
-        self, conn: object, metrics: dict[str, Any], now: float
-    ) -> None:
+    def _collect_wmi_static(self, conn: object, metrics: dict[str, Any], now: float) -> None:
         """Collect slow-changing WMI info once, then republish from cache."""
         if self._wmi_static_collected:
             for key, cached in self._wmi_static.items():
-                metrics[key] = metric_value(
-                    cached["value"], unit=cached.get("unit")
-                )
+                metrics[key] = metric_value(cached["value"], unit=cached.get("unit"))
             return
 
         try:
@@ -386,9 +358,7 @@ class WindowsPlatformCollector(Collector):
                     gpu = gpus[0]
                     gpu_name = getattr(gpu, "Name", None)
                     if gpu_name:
-                        static["system.gpu_model"] = {
-                            "value": str(gpu_name).strip()
-                        }
+                        static["system.gpu_model"] = {"value": str(gpu_name).strip()}
                     adapter_ram = getattr(gpu, "AdapterRAM", None)
                     if adapter_ram is not None and int(adapter_ram) > 0:
                         static["system.gpu_vram_gb"] = {
@@ -397,19 +367,13 @@ class WindowsPlatformCollector(Collector):
                         }
                     driver_ver = getattr(gpu, "DriverVersion", None)
                     if driver_ver:
-                        static["system.gpu_driver"] = {
-                            "value": str(driver_ver)
-                        }
+                        static["system.gpu_driver"] = {"value": str(driver_ver)}
                     h_res = getattr(gpu, "CurrentHorizontalResolution", None)
                     v_res = getattr(gpu, "CurrentVerticalResolution", None)
                     if h_res and v_res:
-                        static["system.screen_resolution"] = {
-                            "value": f"{h_res}x{v_res}"
-                        }
+                        static["system.screen_resolution"] = {"value": f"{h_res}x{v_res}"}
             except Exception:
-                logger.debug(
-                    "WMI Win32_VideoController query failed", exc_info=True
-                )
+                logger.debug("WMI Win32_VideoController query failed", exc_info=True)
 
             # --- OS info ---
             try:
@@ -418,9 +382,7 @@ class WindowsPlatformCollector(Collector):
                     os_obj = os_list[0]
                     caption = getattr(os_obj, "Caption", None)
                     if caption:
-                        static["system.os_name"] = {
-                            "value": str(caption).strip()
-                        }
+                        static["system.os_name"] = {"value": str(caption).strip()}
                     version = getattr(os_obj, "Version", None)
                     if version:
                         static["system.os_version"] = {"value": str(version)}
@@ -428,21 +390,15 @@ class WindowsPlatformCollector(Collector):
                     if build:
                         static["system.os_build"] = {"value": str(build)}
             except Exception:
-                logger.debug(
-                    "WMI Win32_OperatingSystem query failed", exc_info=True
-                )
+                logger.debug("WMI Win32_OperatingSystem query failed", exc_info=True)
 
             # --- BIOS version ---
             try:
                 bios_list = conn.Win32_BIOS()  # type: ignore[attr-defined]
                 if bios_list:
-                    bios_ver = getattr(
-                        bios_list[0], "SMBIOSBIOSVersion", None
-                    )
+                    bios_ver = getattr(bios_list[0], "SMBIOSBIOSVersion", None)
                     if bios_ver:
-                        static["system.bios_version"] = {
-                            "value": str(bios_ver)
-                        }
+                        static["system.bios_version"] = {"value": str(bios_ver)}
             except Exception:
                 logger.debug("WMI Win32_BIOS query failed", exc_info=True)
 
@@ -452,9 +408,7 @@ class WindowsPlatformCollector(Collector):
                 if disks:
                     disk_model = getattr(disks[0], "Model", None)
                     if disk_model:
-                        static["system.disk_model"] = {
-                            "value": str(disk_model).strip()
-                        }
+                        static["system.disk_model"] = {"value": str(disk_model).strip()}
             except Exception:
                 logger.debug("WMI Win32_DiskDrive query failed", exc_info=True)
 

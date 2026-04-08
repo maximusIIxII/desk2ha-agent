@@ -45,8 +45,7 @@ class HIDBatteryCollector(Collector):
             self._devices = [
                 d
                 for d in devices
-                if d.get("usage_page")
-                in (_USAGE_PAGE_POWER_DEVICE, _USAGE_PAGE_BATTERY)
+                if d.get("usage_page") in (_USAGE_PAGE_POWER_DEVICE, _USAGE_PAGE_BATTERY)
             ]
             return len(self._devices) > 0
         except ImportError:
@@ -76,8 +75,7 @@ class HIDBatteryCollector(Collector):
             battery_devices = [
                 d
                 for d in all_devices
-                if d.get("usage_page")
-                in (_USAGE_PAGE_POWER_DEVICE, _USAGE_PAGE_BATTERY)
+                if d.get("usage_page") in (_USAGE_PAGE_POWER_DEVICE, _USAGE_PAGE_BATTERY)
             ]
         except Exception:
             logger.debug("HID re-enumeration failed", exc_info=True)
@@ -113,9 +111,7 @@ class HIDBatteryCollector(Collector):
                                     float(level), unit="%"
                                 )
                                 metrics[f"{prefix}.model"] = metric_value(product)
-                                metrics[f"{prefix}.manufacturer"] = metric_value(
-                                    manufacturer
-                                )
+                                metrics[f"{prefix}.manufacturer"] = metric_value(manufacturer)
                                 break
                     except Exception:
                         continue
