@@ -28,6 +28,7 @@ COLLECTOR_MODULES: list[str] = [
     "desk2ha_agent.collector.generic.headsetcontrol",
     "desk2ha_agent.collector.generic.usb_pd",
     "desk2ha_agent.collector.generic.network",
+    "desk2ha_agent.collector.generic.usb_devices",
     # Vendor plugins
     "desk2ha_agent.collector.vendor.dell_dcm",
     "desk2ha_agent.collector.vendor.hp_wmi",
