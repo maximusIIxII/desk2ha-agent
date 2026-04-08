@@ -57,6 +57,7 @@ dev = [
 
 [project.scripts]
 desk2ha-agent = "desk2ha_agent.__main__:main"
+desk2ha-helper = "desk2ha_agent.helper.__main__:main"
 
 [project.urls]
 Homepage = "https://github.com/maximusIIxII/desk2ha-agent"
