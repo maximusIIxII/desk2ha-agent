@@ -123,9 +123,7 @@ async def _run(config_path: Path, *, service_mode: bool = False) -> None:
             await state.update(
                 {
                     "agent.version": metric_value(__version__),
-                    "agent.uptime": metric_value(
-                        round(time.monotonic() - start_time), unit="s"
-                    ),
+                    "agent.uptime": metric_value(round(time.monotonic() - start_time), unit="s"),
                 }
             )
             await asyncio.sleep(30)

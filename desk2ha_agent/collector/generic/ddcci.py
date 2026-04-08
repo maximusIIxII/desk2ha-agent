@@ -578,9 +578,7 @@ class DDCCICollector(Collector):
         raise NotImplementedError(f"Unknown command: {command}")
 
     @staticmethod
-    def _set_vcp_sync(
-        get_monitors: Any, display_index: int, vcp_code: int, value: int
-    ) -> None:
+    def _set_vcp_sync(get_monitors: Any, display_index: int, vcp_code: int, value: int) -> None:
         monitors = get_monitors()
         if display_index >= len(monitors):
             raise ValueError(f"Display index {display_index} out of range")

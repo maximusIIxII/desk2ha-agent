@@ -447,9 +447,7 @@ class MqttTransport(Transport):
                 "name": name,
                 "unique_id": object_id,
                 "state_topic": state_topic,
-                "value_template": (
-                    f"{{{{ value_json['{metric_key}']['value'] }}}}"
-                ),
+                "value_template": (f"{{{{ value_json['{metric_key}']['value'] }}}}"),
                 "availability_topic": avail_topic,
                 "payload_available": "online",
                 "payload_not_available": "offline",
@@ -672,9 +670,7 @@ class MqttTransport(Transport):
 
         for collector in self._scheduler.collectors:
             try:
-                result = await collector.execute_command(
-                    command, target, parameters
-                )
+                result = await collector.execute_command(command, target, parameters)
                 logger.info("MQTT command %s completed: %s", command, result)
                 return
             except NotImplementedError:
