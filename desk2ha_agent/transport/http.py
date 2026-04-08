@@ -263,14 +263,21 @@ class HttpTransport(Transport):
         return web.json_response(resp)
 
     async def _handle_image(self, request: web.Request) -> web.Response:
-        """GET /v1/image/{device_key} -- stub, returns 404 for now."""
-        device_key = request.match_info["device_key"]
-        return web.json_response(
-            {
-                "error": "not_found",
-                "message": f"No image available for device {device_key}",
-            },
-            status=404,
+        """GET /v1/image/{device_key} -- serve device icon SVG."""
+        from desk2ha_agent.images.device_icons import get_device_icon_svg
+
+        # Determine device type from info_provider
+        device_type = "notebook"  # default
+        if self._info_provider is not None:
+            hw = self._info_provider.get_hardware()
+            if hw and hw.get("device_type"):
+                device_type = hw["device_type"]
+
+        svg = get_device_icon_svg(device_type)
+        return web.Response(
+            text=svg,
+            content_type="image/svg+xml",
+            headers={"Cache-Control": "public, max-age=3600"},
         )
 
     async def _handle_commands_list(self, _request: web.Request) -> web.Response:
