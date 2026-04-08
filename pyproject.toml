@@ -55,6 +55,9 @@ dev = [
     "pre-commit>=3.7",
 ]
 
+[project.scripts]
+desk2ha-agent = "desk2ha_agent.__main__:main"
+
 [project.urls]
 Homepage = "https://github.com/maximusIIxII/desk2ha-agent"
 Repository = "https://github.com/maximusIIxII/desk2ha-agent"
