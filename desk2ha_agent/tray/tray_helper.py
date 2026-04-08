@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import subprocess
@@ -107,10 +108,8 @@ class TrayIcon:
     def stop(self) -> None:
         """Stop the tray icon."""
         if self._icon is not None:
-            try:
+            with contextlib.suppress(Exception):
                 self._icon.stop()
-            except Exception:
-                pass
 
     def _open_log(self) -> None:
         """Open the log file in the default editor."""
