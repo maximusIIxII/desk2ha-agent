@@ -157,12 +157,19 @@ class LogitechLitraCollector(Collector):
 
     def _read_value(self, h: Any, cmd: int) -> int | None:
         """Send a GET command and read the uint16 response."""
+        import time
+
         try:
+            # Flush any pending reads
+            while h.read(20):
+                pass
+
             report = _build_report(cmd)
             h.write(report)
+            time.sleep(0.15)
 
-            # Read response (may need a few attempts)
-            for _ in range(10):
+            # Read response (match on command byte)
+            for _ in range(20):
                 data = h.read(20)
                 if data and len(data) >= 6 and data[3] == cmd:
                     return (data[4] << 8) | data[5]
