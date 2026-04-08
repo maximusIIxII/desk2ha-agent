@@ -28,9 +28,10 @@ logger = logging.getLogger(__name__)
 
 # Map DCM sensor element names to well-known metric keys.
 _THERMAL_KEY_MAP: dict[str, str] = {
-    "cpu": "cpu_package",
+    # More specific patterns must come before less specific ones
     "cpu package": "cpu_package",
     "cpu core": "cpu_core_max",
+    "cpu": "cpu_package",
     "ambient": "ambient",
     "memory": "memory",
     "ssd": "ssd",
