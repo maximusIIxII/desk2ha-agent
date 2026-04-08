@@ -4,8 +4,10 @@ Reads detailed thermals (CPU, GPU, SSD, skin, ambient), fan speeds, and
 power delivery data from the ``root\\dcim\\sysman`` WMI namespace exposed
 by Dell Command | Monitor (DCM).
 
-DCM is free and available from Dell's support site. Without DCM, the
-platform collector still provides basic metrics via standard WMI/psutil.
+When running without admin privileges, this collector queries the
+elevated helper process (desk2ha-helper) on localhost:9694 instead.
+Direct WMI access is used when the process itself has admin rights
+(e.g. inside the helper, or when the agent runs elevated).
 """
 
 from __future__ import annotations
@@ -37,9 +39,11 @@ _THERMAL_KEY_MAP: dict[str, str] = {
     "ssd": "ssd",
     "gpu": "gpu",
     "pch": "pch",
+    "nb": "northbridge",
     "battery": "battery_temp",
     "skin": "skin",
     "charger": "charger",
+    "other": "misc",
 }
 
 
@@ -52,8 +56,27 @@ def _normalize_sensor_name(name: str) -> str:
     return lower.replace(" ", "_").replace("-", "_")
 
 
+def _is_admin() -> bool:
+    """Check if running with admin privileges."""
+    if sys.platform != "win32":
+        import os
+
+        return os.geteuid() == 0
+    try:
+        import ctypes
+
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:
+        return False
+
+
 class DellDcmCollector(Collector):
-    """Collect thermals, fan speeds, and power data from Dell Command | Monitor."""
+    """Collect thermals, fan speeds, and power data from Dell Command | Monitor.
+
+    Two modes of operation:
+    - **Direct WMI** (admin): queries root\\dcim\\sysman directly
+    - **Via helper** (non-admin): fetches from desk2ha-helper on localhost:9694
+    """
 
     meta: ClassVar[CollectorMeta] = CollectorMeta(
         name="dell_dcm",
@@ -66,15 +89,40 @@ class DellDcmCollector(Collector):
 
     def __init__(self) -> None:
         self._available: bool | None = None
+        self._use_helper: bool = False
+        self._helper_client: Any = None
         self._power_warned: bool = False
 
     async def probe(self) -> bool:
-        """Check if DCM WMI namespace is accessible."""
+        """Check if DCM data is accessible (directly or via helper)."""
         if sys.platform != "win32":
             return False
-        return await asyncio.to_thread(self._probe_sync)
 
-    def _probe_sync(self) -> bool:
+        # Try direct WMI first (works if elevated)
+        if _is_admin():
+            result = await asyncio.to_thread(self._probe_wmi)
+            if result:
+                logger.info("Dell DCM: direct WMI access (elevated)")
+                return True
+
+        # Try helper
+        from desk2ha_agent.helper.client import HelperClient
+
+        self._helper_client = HelperClient()
+        if await self._helper_client.is_available():
+            # Verify helper actually has DCM metrics
+            metrics = await self._helper_client.get_metrics()
+            if metrics:
+                self._use_helper = True
+                logger.info("Dell DCM: using elevated helper (%d metrics)", len(metrics))
+                return True
+            logger.info("Dell DCM: helper running but no DCM metrics")
+
+        logger.info("Dell DCM: not available (not elevated and helper not running)")
+        return False
+
+    def _probe_wmi(self) -> bool:
+        """Probe DCM WMI namespace directly."""
         try:
             import pythoncom  # type: ignore[import-untyped]
             import wmi  # type: ignore[import-untyped]
@@ -82,7 +130,6 @@ class DellDcmCollector(Collector):
             pythoncom.CoInitialize()
             try:
                 conn = wmi.WMI(namespace=r"root\dcim\sysman")
-                # Quick sanity check: can we query?
                 sensors = conn.query(
                     "SELECT ElementName FROM DCIM_NumericSensor WHERE SensorType = 2"
                 )
@@ -94,17 +141,28 @@ class DellDcmCollector(Collector):
         except ImportError:
             return False
         except Exception:
-            logger.debug("Dell DCM probe failed (DCM not installed?)", exc_info=True)
+            logger.debug("Dell DCM WMI probe failed", exc_info=True)
             return False
 
     async def setup(self) -> None:
         self._available = True
-        logger.info("Dell Command | Monitor collector activated")
+        mode = "helper" if self._use_helper else "direct WMI"
+        logger.info("Dell Command | Monitor collector activated (%s)", mode)
 
     async def collect(self) -> dict[str, Any]:
         if not self._available:
             return {}
+
+        if self._use_helper:
+            return await self._collect_via_helper()
+
         return await asyncio.to_thread(self._collect_sync)
+
+    async def _collect_via_helper(self) -> dict[str, Any]:
+        """Fetch DCM metrics from the elevated helper."""
+        if self._helper_client is None:
+            return {}
+        return await self._helper_client.get_metrics()
 
     def _collect_sync(self) -> dict[str, Any]:
         import pythoncom  # type: ignore[import-untyped]
@@ -172,7 +230,7 @@ class DellDcmCollector(Collector):
                     continue
 
                 lower_name = name.lower()
-                if "cpu" in lower_name:
+                if "cpu" in lower_name or "processor" in lower_name:
                     key = "fan.cpu"
                 elif "gpu" in lower_name or "video" in lower_name:
                     key = "fan.gpu"
@@ -241,7 +299,6 @@ class DellDcmCollector(Collector):
         pythoncom.CoInitialize()
         try:
             conn = wmi.WMI(namespace=r"root\dcim\sysman")
-            # Dell uses DCIM_LCService.SetThermalSetting or direct WMI method
             conn.query("SELECT * FROM DCIM_ThermalCooling WHERE InstanceID = 'ThermalProfile'")
             logger.info("Thermal profile set to %s (%d)", profile, value)
             return {"status": "completed", "profile": profile}
