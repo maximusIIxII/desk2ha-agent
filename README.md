@@ -79,6 +79,46 @@ See [`examples/full-config.toml`](examples/full-config.toml) for all options.
 | GET | `/v1/update/check` | Yes | Check for new agent release |
 | POST | `/v1/update/install` | Yes | Install agent update |
 
+## Recommended Vendor Software
+
+The agent works out of the box with basic metrics via standard OS APIs. For **full telemetry** (detailed thermals, fan speeds, battery health, thermal profile control), install the vendor-specific software for your hardware:
+
+### Dell
+
+| Software | What it unlocks | Download |
+|----------|----------------|----------|
+| **Dell Command \| Monitor** | CPU/GPU/SSD/skin thermals, fan RPM, AC adapter wattage, thermal profile control | [Dell Support](https://www.dell.com/support/kbdoc/en-us/000177080/dell-command-monitor) |
+| **Dell Peripheral Manager** | Webcam settings, keyboard backlight, mouse DPI for Dell peripherals | [Dell Support](https://www.dell.com/support/kbdoc/en-us/000201446/dell-peripheral-manager) |
+
+### HP
+
+| Software | What it unlocks | Download |
+|----------|----------------|----------|
+| **HP System Event Utility** | BIOS settings, thermal profile, fan control | [HP Support](https://support.hp.com/drivers) (search your model) |
+| **HP Notifications** | Battery health, power delivery info | Included with HP Support Assistant |
+
+### Lenovo
+
+| Software | What it unlocks | Download |
+|----------|----------------|----------|
+| **Lenovo Vantage** | Thermal mode, battery thresholds, keyboard backlight | [Microsoft Store](https://apps.microsoft.com/detail/9WZDNCRFJ4MV) |
+| **Lenovo System Interface Foundation** | WMI access for BIOS settings, fan speed | [Lenovo Support](https://support.lenovo.com/solutions/ht503475) |
+
+### Linux (ThinkPad)
+
+| Module | What it unlocks | How to enable |
+|--------|----------------|---------------|
+| `thinkpad_acpi` | Fan speed, thermal mode | Usually auto-loaded. Check: `lsmod \| grep thinkpad` |
+| `ideapad_acpi` | Performance mode (IdeaPad/Legion) | Usually auto-loaded. Check: `lsmod \| grep ideapad` |
+
+### Cross-Platform
+
+| Software | What it unlocks | Download |
+|----------|----------------|----------|
+| **HeadsetControl** | Headset battery, sidetone, LED, chatmix (SteelSeries, Corsair, Logitech, HyperX) | [GitHub](https://github.com/Sapd/HeadsetControl/releases) |
+
+> **Note:** All vendor software is optional. The agent gracefully skips collectors when the required software is not installed. You can check which collectors are active via `GET /v1/info`.
+
 ## Windows Autostart
 
 The agent needs an interactive desktop session for DDC/CI monitor control. Use the Startup folder (not a Windows Service):
