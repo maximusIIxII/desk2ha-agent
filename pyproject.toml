@@ -1,0 +1,76 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "desk2ha-agent"
+version = "0.1.0"
+description = "Multi-vendor desktop telemetry agent for Home Assistant"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+authors = [
+    { name = "maximusIIxII" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Home Automation",
+]
+dependencies = [
+    "aiohttp>=3.9",
+    "paho-mqtt>=2.0",
+    "pydantic>=2.5",
+    "monitorcontrol>=3.0",
+    "hidapi>=0.14",
+]
+
+[project.optional-dependencies]
+windows = [
+    "wmi>=1.5",
+    "pywin32>=306",
+    "winrt-Windows.Devices.Bluetooth>=2.0",
+    "pystray>=0.19",
+    "Pillow>=10.0",
+]
+linux = [
+    "bleak>=0.21",
+]
+macos = [
+    "bleak>=0.21",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.4",
+    "mypy>=1.9",
+    "datamodel-code-generator>=0.25",
+    "pre-commit>=3.7",
+]
+
+[project.urls]
+Homepage = "https://github.com/maximusIIxII/desk2ha-agent"
+Repository = "https://github.com/maximusIIxII/desk2ha-agent"
+Issues = "https://github.com/maximusIIxII/desk2ha-agent/issues"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 99
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "TCH"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
