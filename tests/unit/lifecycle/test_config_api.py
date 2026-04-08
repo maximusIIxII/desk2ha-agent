@@ -17,7 +17,7 @@ def test_get_config_summary_redacts_secrets(tmp_path: Path):
 
 def test_set_config_value(tmp_path: Path):
     config = tmp_path / "config.toml"
-    config.write_text('[collectors]\ndisabled = []\n')
+    config.write_text("[collectors]\ndisabled = []\n")
     result = set_config_value(config, "collectors", "disabled", ["uvc"])
     assert result["status"] == "applied"
     # Verify file was updated

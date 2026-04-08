@@ -15,20 +15,18 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install ruff
-      - run: ruff check desk2ha_agent/
-      - run: ruff format --check desk2ha_agent/
+      - run: ruff check desk2ha_agent/ tests/
+      - run: ruff format --check desk2ha_agent/ tests/
 
   test:
     strategy:
       matrix:
-        os: [ubuntu-latest]
-        python: ["3.11", "3.12"]
-    runs-on: ${{ matrix.os }}
-    continue-on-error: true
+        python: ["3.11", "3.12", "3.13"]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
       - run: pip install -e ".[dev]"
-      - run: pytest tests/ -x --tb=short || true
+      - run: pytest tests/ -x --tb=short
