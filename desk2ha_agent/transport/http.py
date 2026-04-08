@@ -327,6 +327,20 @@ class HttpTransport(Transport):
             result = await restart_service()
             return web.json_response(result)
 
+        if command in ("system.lock", "system.sleep", "system.shutdown", "system.hibernate"):
+            from desk2ha_agent.lifecycle import system_actions
+
+            action_map = {
+                "system.lock": system_actions.lock_screen,
+                "system.sleep": system_actions.sleep_system,
+                "system.shutdown": lambda: system_actions.shutdown_system(
+                    parameters.get("delay", 0)
+                ),
+                "system.hibernate": system_actions.hibernate_system,
+            }
+            result = await action_map[command]()
+            return web.json_response(result)
+
         if command == "agent.update":
             from desk2ha_agent.lifecycle.self_update import self_update
 
