@@ -128,6 +128,17 @@ async def _run(config_path: Path, *, service_mode: bool = False) -> None:
         mqtt_transport = MqttTransport(config.mqtt, state, info_provider)
         await mqtt_transport.start()
 
+    # Zeroconf advertisement (if HTTP enabled)
+    zeroconf_adv = None
+    if config.http.enabled:
+        try:
+            from desk2ha_agent.transport.zeroconf import ZeroconfAdvertiser
+
+            zeroconf_adv = ZeroconfAdvertiser(config.http, info_provider)
+            await zeroconf_adv.start()
+        except ImportError:
+            logger.debug("zeroconf not installed — skipping mDNS advertisement")
+
     # Tray icon (Windows only, interactive mode)
     tray = None
     if sys.platform == "win32" and not service_mode:
@@ -163,6 +174,8 @@ async def _run(config_path: Path, *, service_mode: bool = False) -> None:
 
     # Graceful shutdown
     logger.info("Shutting down...")
+    if zeroconf_adv is not None:
+        await zeroconf_adv.stop()
     if mqtt_transport is not None:
         await mqtt_transport.stop()
     if http is not None:
