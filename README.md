@@ -137,6 +137,17 @@ The agent needs an interactive desktop session for DDC/CI monitor control. Use t
 | **Duplicate devices after upgrade** | After upgrading from an older version, orphaned entity registry entries may create duplicate devices. Fix: delete the integration in HA and re-add it. | Known |
 | **Logitech Litra G HUB conflict** | If Logitech G HUB is running, it may hold the HID interface and prevent the agent from reading Litra status. | Close G HUB or disable Litra in G HUB |
 
+## Upcoming Features
+
+- **Bluetooth peripheral enumeration**: Detect mouse/keyboard via Dell Universal Receiver and Logitech Bolt
+- **Dell Command Monitor v10 support**: Resolve WMI provider registration for DCM v10.x
+- **Webcam UVC controls**: Brightness, contrast, white balance, FOV, autofocus
+- **Corsair/SteelSeries/Razer plugins**: iCUE SDK, Sonar REST, Synapse integration
+- **Product image system**: Vendor-specific device silhouettes and fetched product photos
+- **Remote agent installation**: Deploy agent from HA UI via SSH/WinRM
+- **Prometheus endpoint**: `/metrics` in Prometheus scrape format
+- **Fleet management**: Multi-agent coordination for enterprise environments
+
 ## License
 
 Apache-2.0
