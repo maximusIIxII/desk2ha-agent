@@ -223,6 +223,13 @@ class HttpTransport(Transport):
                     audio.setdefault(dev_id, {})[metric_name] = value
             elif key.startswith("agent."):
                 agent[key.removeprefix("agent.")] = value
+            elif key.startswith("network."):
+                system[key] = value  # Network metrics go to system
+            elif key.startswith("webcam."):
+                parts = key.split(".", 2)
+                if len(parts) == 3:
+                    dev_id = f"peripheral.{parts[0]}_{parts[1]}"
+                    peripherals.setdefault(dev_id, {})[parts[2]] = value
             else:
                 # Thermal metrics (cpu_package, skin, fan.*)
                 thermals[key] = value
