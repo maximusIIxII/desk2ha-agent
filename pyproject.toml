@@ -29,6 +29,7 @@ dependencies = [
     "pydantic>=2.5",
     "monitorcontrol>=3.0",
     "hidapi>=0.14",
+    "zeroconf>=0.131",
 ]
 
 [project.optional-dependencies]
