@@ -524,6 +524,9 @@ class DDCCICollector(Collector):
         self, command: str, target: str, parameters: dict[str, Any]
     ) -> dict[str, Any]:
         """Execute display control commands."""
+        if not command.startswith("display."):
+            raise NotImplementedError
+
         from monitorcontrol import get_monitors
 
         # Parse display index from target (e.g. "display.0")
