@@ -9,6 +9,7 @@ import logging
 import logging.handlers
 import signal
 import sys
+import time
 from pathlib import Path
 
 from desk2ha_agent import __version__
@@ -112,6 +113,25 @@ async def _run(config_path: Path, *, service_mode: bool = False) -> None:
     await scheduler.start()
     await asyncio.sleep(1.0)  # Let collectors gather initial data
 
+    # Inject agent-level metrics
+    from desk2ha_agent.collector.base import metric_value
+
+    start_time = time.monotonic()
+
+    async def _update_agent_metrics() -> None:
+        while True:
+            await state.update(
+                {
+                    "agent.version": metric_value(__version__),
+                    "agent.uptime": metric_value(
+                        round(time.monotonic() - start_time), unit="s"
+                    ),
+                }
+            )
+            await asyncio.sleep(30)
+
+    agent_metrics_task = asyncio.create_task(_update_agent_metrics(), name="agent-metrics")
+
     # Start HTTP transport
     http = None
     if config.http.enabled:
@@ -174,6 +194,7 @@ async def _run(config_path: Path, *, service_mode: bool = False) -> None:
 
     # Graceful shutdown
     logger.info("Shutting down...")
+    agent_metrics_task.cancel()
     if zeroconf_adv is not None:
         await zeroconf_adv.stop()
     if mqtt_transport is not None:
