@@ -55,9 +55,7 @@ class NetworkCollector(Collector):
             slug = iface.lower().replace(" ", "_").replace("-", "_")[:20]
 
             if st.speed > 0:
-                metrics[f"network.{slug}.speed_mbps"] = metric_value(
-                    float(st.speed), unit="Mbps"
-                )
+                metrics[f"network.{slug}.speed_mbps"] = metric_value(float(st.speed), unit="Mbps")
 
         # WiFi signal strength (platform-specific)
         try:
@@ -92,9 +90,7 @@ class NetworkCollector(Collector):
                 line = line.strip()
                 if "Signal" in line and "%" in line:
                     pct = line.split(":")[1].strip().rstrip("%")
-                    metrics["network.wifi_signal_percent"] = metric_value(
-                        float(pct), unit="%"
-                    )
+                    metrics["network.wifi_signal_percent"] = metric_value(float(pct), unit="%")
                 elif "SSID" in line and "BSSID" not in line:
                     ssid = line.split(":", 1)[1].strip()
                     if ssid:
@@ -117,9 +113,7 @@ class NetworkCollector(Collector):
                     parts = line.split("Signal level=")
                     if len(parts) > 1:
                         dbm = parts[1].split()[0].rstrip("dBm")
-                        metrics["network.wifi_rssi_dbm"] = metric_value(
-                            float(dbm), unit="dBm"
-                        )
+                        metrics["network.wifi_rssi_dbm"] = metric_value(float(dbm), unit="dBm")
                 if "ESSID:" in line:
                     ssid = line.split('ESSID:"')[1].rstrip('"') if 'ESSID:"' in line else ""
                     if ssid:
@@ -145,9 +139,7 @@ class NetworkCollector(Collector):
                 line = line.strip()
                 if line.startswith("agrCtlRSSI:"):
                     rssi = line.split(":")[1].strip()
-                    metrics["network.wifi_rssi_dbm"] = metric_value(
-                        float(rssi), unit="dBm"
-                    )
+                    metrics["network.wifi_rssi_dbm"] = metric_value(float(rssi), unit="dBm")
                 elif line.startswith("SSID:"):
                     ssid = line.split(":", 1)[1].strip()
                     if ssid:

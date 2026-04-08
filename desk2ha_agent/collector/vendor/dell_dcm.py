@@ -234,18 +234,14 @@ class DellDcmCollector(Collector):
         if value is None:
             return {
                 "status": "failed",
-                "message": f"Unknown profile: {profile}. "
-                f"Options: {list(_PROFILE_MAP)}",
+                "message": f"Unknown profile: {profile}. Options: {list(_PROFILE_MAP)}",
             }
 
         pythoncom.CoInitialize()
         try:
             conn = wmi.WMI(namespace=r"root\dcim\sysman")
             # Dell uses DCIM_LCService.SetThermalSetting or direct WMI method
-            conn.query(
-                "SELECT * FROM DCIM_ThermalCooling "
-                "WHERE InstanceID = 'ThermalProfile'"
-            )
+            conn.query("SELECT * FROM DCIM_ThermalCooling WHERE InstanceID = 'ThermalProfile'")
             logger.info("Thermal profile set to %s (%d)", profile, value)
             return {"status": "completed", "profile": profile}
         except Exception as exc:

@@ -84,9 +84,7 @@ class HpWmiCollector(Collector):
             # Thermals via root\WMI (HP thermal zone)
             try:
                 wmi_conn = wmi.WMI(namespace=r"root\WMI")
-                sensors = wmi_conn.query(
-                    "SELECT * FROM MSAcpi_ThermalZoneTemperature"
-                )
+                sensors = wmi_conn.query("SELECT * FROM MSAcpi_ThermalZoneTemperature")
                 for i, sensor in enumerate(sensors):
                     raw = getattr(sensor, "CurrentTemperature", None)
                     if raw is None:
@@ -102,9 +100,7 @@ class HpWmiCollector(Collector):
             # Fan speed via HP WMI
             try:
                 hp_conn = wmi.WMI(namespace=r"root\HP\InstrumentedBIOS")
-                fans = hp_conn.query(
-                    "SELECT * FROM HP_BIOSSetting WHERE Name LIKE '%Fan%'"
-                )
+                fans = hp_conn.query("SELECT * FROM HP_BIOSSetting WHERE Name LIKE '%Fan%'")
                 for fan in fans:
                     name = getattr(fan, "Name", "")
                     value = getattr(fan, "CurrentValue", None)
@@ -118,8 +114,7 @@ class HpWmiCollector(Collector):
             try:
                 hp_conn = wmi.WMI(namespace=r"root\HP\InstrumentedBIOS")
                 profiles = hp_conn.query(
-                    "SELECT * FROM HP_BIOSSetting "
-                    "WHERE Name = 'Thermal Profile'"
+                    "SELECT * FROM HP_BIOSSetting WHERE Name = 'Thermal Profile'"
                 )
                 for p in profiles:
                     val = getattr(p, "CurrentValue", None)

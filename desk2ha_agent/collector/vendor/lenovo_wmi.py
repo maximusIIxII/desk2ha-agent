@@ -62,9 +62,7 @@ class LenovoWmiCollector(Collector):
                 # Try Lenovo BIOS WMI namespace
                 conn = wmi.WMI(namespace=r"root\WMI")
                 # Lenovo_BiosSetting is available on ThinkPads
-                items = conn.query(
-                    "SELECT * FROM Lenovo_BiosSetting"
-                )
+                items = conn.query("SELECT * FROM Lenovo_BiosSetting")
                 count = len(list(items))
                 if count > 0:
                     logger.info("Lenovo WMI: found %d BIOS settings", count)
@@ -124,8 +122,7 @@ class LenovoWmiCollector(Collector):
             # Thermal profile / performance mode
             try:
                 settings = conn.query(
-                    "SELECT * FROM Lenovo_BiosSetting "
-                    "WHERE CurrentSetting LIKE 'ThermalMode%'"
+                    "SELECT * FROM Lenovo_BiosSetting WHERE CurrentSetting LIKE 'ThermalMode%'"
                 )
                 for s in settings:
                     val = getattr(s, "CurrentSetting", "")
@@ -167,14 +164,8 @@ class LenovoWmiCollector(Collector):
 
         # Battery charge thresholds (ThinkPad specific)
         for bat_idx in range(2):
-            start = Path(
-                f"/sys/class/power_supply/BAT{bat_idx}"
-                "/charge_control_start_threshold"
-            )
-            end = Path(
-                f"/sys/class/power_supply/BAT{bat_idx}"
-                "/charge_control_end_threshold"
-            )
+            start = Path(f"/sys/class/power_supply/BAT{bat_idx}/charge_control_start_threshold")
+            end = Path(f"/sys/class/power_supply/BAT{bat_idx}/charge_control_end_threshold")
             if start.exists():
                 try:
                     val = int(start.read_text().strip())
@@ -202,9 +193,7 @@ class LenovoWmiCollector(Collector):
                     1: "extreme_performance",
                     2: "battery_saving",
                 }
-                metrics["thermal_profile"] = metric_value(
-                    mode_map.get(mode, f"mode_{mode}")
-                )
+                metrics["thermal_profile"] = metric_value(mode_map.get(mode, f"mode_{mode}"))
             except Exception:
                 pass
 
