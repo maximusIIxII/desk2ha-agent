@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Any, ClassVar
 
@@ -82,9 +81,7 @@ class BLEBatteryCollector(Collector):
                 try:
                     async with BleakClient(device.address, timeout=10.0) as client:
                         # Read battery level
-                        battery_data = await client.read_gatt_char(
-                            BATTERY_LEVEL_CHAR_UUID
-                        )
+                        battery_data = await client.read_gatt_char(BATTERY_LEVEL_CHAR_UUID)
                         if battery_data:
                             level = int(battery_data[0])
                             metrics[f"{prefix}.battery_level"] = metric_value(
@@ -94,9 +91,7 @@ class BLEBatteryCollector(Collector):
 
                         # Try to read device info
                         try:
-                            mfr_data = await client.read_gatt_char(
-                                MANUFACTURER_NAME_CHAR_UUID
-                            )
+                            mfr_data = await client.read_gatt_char(MANUFACTURER_NAME_CHAR_UUID)
                             if mfr_data:
                                 metrics[f"{prefix}.manufacturer"] = metric_value(
                                     mfr_data.decode("utf-8", errors="ignore")
@@ -105,9 +100,7 @@ class BLEBatteryCollector(Collector):
                             pass
 
                         try:
-                            fw_data = await client.read_gatt_char(
-                                FIRMWARE_REVISION_CHAR_UUID
-                            )
+                            fw_data = await client.read_gatt_char(FIRMWARE_REVISION_CHAR_UUID)
                             if fw_data:
                                 metrics[f"{prefix}.firmware"] = metric_value(
                                     fw_data.decode("utf-8", errors="ignore")

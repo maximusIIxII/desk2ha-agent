@@ -17,3 +17,4 @@ venv/
 htmlcov/
 *.toml.bak
 desk2ha-agent.toml
+test-config.toml
