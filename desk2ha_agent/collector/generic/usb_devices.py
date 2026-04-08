@@ -49,6 +49,7 @@ _KNOWN_DEVICES: dict[str, tuple[str, str]] = {
     "046D:C548": ("Logitech Unifying Receiver", "Logitech"),
     "046D:C52B": ("Logitech Unifying Receiver", "Logitech"),
     "046D:0A87": ("Logitech Zone Wireless", "Logitech"),
+    "FFFF:BACE": ("Logitech Litra Glow", "Logitech"),
     "0424:7260": ("Microchip USB Hub (Monitor)", "Microchip"),
     "1532:0084": ("Razer DeathAdder V2", "Razer"),
     "1532:026F": ("Razer Huntsman V3", "Razer"),
