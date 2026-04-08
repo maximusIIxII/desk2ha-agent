@@ -121,8 +121,8 @@ class UVCCollector(Collector):
         """Set UVC controls."""
         try:
             import cv2
-        except ImportError:
-            raise RuntimeError("opencv-python not installed")
+        except ImportError as exc:
+            raise RuntimeError("opencv-python not installed") from exc
 
         idx = int(target.split(".")[-1]) if "." in target else 0
 
@@ -136,9 +136,7 @@ class UVCCollector(Collector):
 
         if command in prop_map:
             value = parameters.get("value", 0)
-            await asyncio.to_thread(
-                self._set_prop_sync, cv2, idx, prop_map[command], int(value)
-            )
+            await asyncio.to_thread(self._set_prop_sync, cv2, idx, prop_map[command], int(value))
             return {"status": "completed"}
 
         raise NotImplementedError(f"Unknown command: {command}")

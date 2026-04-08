@@ -71,13 +71,8 @@ async def discover_collectors(
             continue
 
         meta = collector_cls.meta
-        if (
-            current_platform not in meta.platforms
-            and Platform.ANY not in meta.platforms
-        ):
-            logger.debug(
-                "Skipping %s: wrong platform (%s)", meta.name, current_platform
-            )
+        if current_platform not in meta.platforms and Platform.ANY not in meta.platforms:
+            logger.debug("Skipping %s: wrong platform (%s)", meta.name, current_platform)
             continue
 
         instance = collector_cls()
@@ -85,9 +80,7 @@ async def discover_collectors(
             if await instance.probe():
                 await instance.setup()
                 active.append(instance)
-                logger.info(
-                    "Activated collector: %s (%s tier)", meta.name, meta.tier
-                )
+                logger.info("Activated collector: %s (%s tier)", meta.name, meta.tier)
             else:
                 logger.debug("Collector %s probed negative", meta.name)
         except Exception:

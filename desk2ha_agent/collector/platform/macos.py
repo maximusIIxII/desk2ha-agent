@@ -151,9 +151,7 @@ class MacosPlatformCollector(Collector):
             }
             self._device_key = f"HOST-{hostname.lower()}"
 
-    def _collect_battery(
-        self, metrics: dict[str, Any], now: float
-    ) -> None:
+    def _collect_battery(self, metrics: dict[str, Any], now: float) -> None:
         """Read battery from pmset / ioreg."""
         try:
             result = subprocess.run(
@@ -169,9 +167,7 @@ class MacosPlatformCollector(Collector):
                 level = int(match.group(1))
                 state = match.group(2).lower()
 
-                metrics["battery.level_percent"] = metric_value(
-                    float(level), unit="%"
-                )
+                metrics["battery.level_percent"] = metric_value(float(level), unit="%")
                 metrics["battery.state"] = metric_value(state)
 
             # Check if on AC
@@ -183,9 +179,7 @@ class MacosPlatformCollector(Collector):
         except Exception:
             logger.debug("Failed to read battery from pmset", exc_info=True)
 
-    def _collect_psutil_metrics(
-        self, metrics: dict[str, Any], now: float
-    ) -> None:
+    def _collect_psutil_metrics(self, metrics: dict[str, Any], now: float) -> None:
         """Collect cross-platform live metrics via psutil."""
         try:
             metrics["system.cpu_usage_percent"] = metric_value(
@@ -199,26 +193,18 @@ class MacosPlatformCollector(Collector):
                 )
 
             vmem = psutil.virtual_memory()
-            metrics["system.ram_used_gb"] = metric_value(
-                round(vmem.used / 1024**3, 2), unit="GB"
-            )
+            metrics["system.ram_used_gb"] = metric_value(round(vmem.used / 1024**3, 2), unit="GB")
             metrics["system.ram_total_gb"] = metric_value(
                 round(vmem.total / 1024**3, 2), unit="GB"
             )
-            metrics["system.ram_usage_percent"] = metric_value(
-                vmem.percent, unit="%"
-            )
+            metrics["system.ram_usage_percent"] = metric_value(vmem.percent, unit="%")
 
             swap = psutil.swap_memory()
-            metrics["system.swap_usage_percent"] = metric_value(
-                swap.percent, unit="%"
-            )
+            metrics["system.swap_usage_percent"] = metric_value(swap.percent, unit="%")
 
             try:
                 disk = psutil.disk_usage("/")
-                metrics["system.disk_usage_percent"] = metric_value(
-                    disk.percent, unit="%"
-                )
+                metrics["system.disk_usage_percent"] = metric_value(disk.percent, unit="%")
                 metrics["system.disk_free_gb"] = metric_value(
                     round(disk.free / 1024**3, 2), unit="GB"
                 )

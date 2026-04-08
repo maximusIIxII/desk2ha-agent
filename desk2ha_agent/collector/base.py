@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 class Platform(StrEnum):
     """Supported platforms."""
+
     WINDOWS = "windows"
     LINUX = "linux"
     MACOS = "macos"
@@ -22,6 +23,7 @@ class Platform(StrEnum):
 
 class CollectorTier(StrEnum):
     """Collector tier in the 3-layer architecture."""
+
     PLATFORM = "platform"
     GENERIC = "generic"
     VENDOR = "vendor"
@@ -30,6 +32,7 @@ class CollectorTier(StrEnum):
 @dataclass
 class CollectorMeta:
     """Metadata for collector registration and discovery."""
+
     name: str
     tier: CollectorTier
     platforms: set[Platform]
