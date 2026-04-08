@@ -29,7 +29,10 @@ async def test_callback_invoked():
 async def test_unregister_callback():
     cache = StateCache()
     received = []
-    cb = lambda data: received.append(data)
+
+    def cb(data):
+        received.append(data)
+
     cache.register_callback(cb)
     cache.unregister_callback(cb)
     await cache.update({"test": {"value": 1}})

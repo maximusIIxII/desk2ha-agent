@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from desk2ha_agent.collector.base import Platform
 from desk2ha_agent.plugin_registry import get_current_platform
 
