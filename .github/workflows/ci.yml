@@ -3,12 +3,30 @@ name: CI
 on:
   pull_request:
     branches: [main]
+    paths:
+      - "desk2ha_agent/**"
+      - "tests/**"
+      - ".github/workflows/ci.yml"
+      - "pyproject.toml"
+      - ".pre-commit-config.yaml"
   push:
     branches: [main]
+    paths:
+      - "desk2ha_agent/**"
+      - "tests/**"
+      - ".github/workflows/ci.yml"
+      - "pyproject.toml"
+      - ".pre-commit-config.yaml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -23,6 +41,8 @@ jobs:
       matrix:
         python: ["3.11", "3.12", "3.13"]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

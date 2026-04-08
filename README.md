@@ -1,5 +1,11 @@
 # Desk2HA Agent
 
+[![GitHub Release](https://img.shields.io/github/v/release/maximusIIxII/desk2ha-agent)](https://github.com/maximusIIxII/desk2ha-agent/releases)
+[![PyPI](https://img.shields.io/pypi/v/desk2ha-agent)](https://pypi.org/project/desk2ha-agent/)
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-green)](LICENSE)
+[![CI](https://github.com/maximusIIxII/desk2ha-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/maximusIIxII/desk2ha-agent/actions/workflows/ci.yml)
+
 Multi-vendor desktop telemetry agent for [Home Assistant](https://www.home-assistant.io/).
 
 Collects hardware metrics, peripheral status, and display settings from Windows, Linux, and macOS — and exposes them via HTTP and MQTT for the [Desk2HA HA integration](https://github.com/maximusIIxII/hass-desk2ha).

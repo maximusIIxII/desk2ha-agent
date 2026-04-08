@@ -15,7 +15,7 @@ enabled = true
 broker = "homeassistant.local"
 port = 1883
 username = "mqttuser"
-password_env = "DESK2HA_MQTT_PASS"
+password = "REDACTED_PASSWORD"
 base_topic = "desk2ha"
 ha_discovery_prefix = "homeassistant"
 
