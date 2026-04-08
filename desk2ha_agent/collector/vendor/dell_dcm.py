@@ -1,0 +1,223 @@
+"""Dell Command | Monitor vendor collector.
+
+Reads detailed thermals (CPU, GPU, SSD, skin, ambient), fan speeds, and
+power delivery data from the ``root\\dcim\\sysman`` WMI namespace exposed
+by Dell Command | Monitor (DCM).
+
+DCM is free and available from Dell's support site. Without DCM, the
+platform collector still provides basic metrics via standard WMI/psutil.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import sys
+import time
+from typing import Any, ClassVar
+
+from desk2ha_agent.collector.base import (
+    Collector,
+    CollectorMeta,
+    CollectorTier,
+    Platform,
+    metric_value,
+)
+
+logger = logging.getLogger(__name__)
+
+# Map DCM sensor element names to well-known metric keys.
+_THERMAL_KEY_MAP: dict[str, str] = {
+    "cpu": "cpu_package",
+    "cpu package": "cpu_package",
+    "cpu core": "cpu_core_max",
+    "ambient": "ambient",
+    "memory": "memory",
+    "ssd": "ssd",
+    "gpu": "gpu",
+    "pch": "pch",
+    "battery": "battery_temp",
+    "skin": "skin",
+    "charger": "charger",
+}
+
+
+def _normalize_sensor_name(name: str) -> str:
+    """Map a DCM sensor name to a well-known metric key."""
+    lower = name.lower().strip()
+    for pattern, key in _THERMAL_KEY_MAP.items():
+        if pattern in lower:
+            return key
+    return lower.replace(" ", "_").replace("-", "_")
+
+
+class DellDcmCollector(Collector):
+    """Collect thermals, fan speeds, and power data from Dell Command | Monitor."""
+
+    meta: ClassVar[CollectorMeta] = CollectorMeta(
+        name="dell_dcm",
+        tier=CollectorTier.VENDOR,
+        platforms={Platform.WINDOWS},
+        capabilities={"thermals", "power"},
+        description="Dell Command | Monitor WMI telemetry (thermals, fans, power)",
+        requires_software="Dell Command | Monitor",
+    )
+
+    def __init__(self) -> None:
+        self._available: bool | None = None
+        self._power_warned: bool = False
+
+    async def probe(self) -> bool:
+        """Check if DCM WMI namespace is accessible."""
+        if sys.platform != "win32":
+            return False
+        return await asyncio.to_thread(self._probe_sync)
+
+    def _probe_sync(self) -> bool:
+        try:
+            import pythoncom  # type: ignore[import-untyped]
+            import wmi  # type: ignore[import-untyped]
+
+            pythoncom.CoInitialize()
+            try:
+                conn = wmi.WMI(namespace=r"root\dcim\sysman")
+                # Quick sanity check: can we query?
+                sensors = conn.query(
+                    "SELECT ElementName FROM DCIM_NumericSensor WHERE SensorType = 2"
+                )
+                count = len(list(sensors))
+                logger.info("Dell DCM: found %d temperature sensors", count)
+                return count > 0
+            finally:
+                pythoncom.CoUninitialize()
+        except ImportError:
+            return False
+        except Exception:
+            logger.debug("Dell DCM probe failed (DCM not installed?)", exc_info=True)
+            return False
+
+    async def setup(self) -> None:
+        self._available = True
+        logger.info("Dell Command | Monitor collector activated")
+
+    async def collect(self) -> dict[str, Any]:
+        if not self._available:
+            return {}
+        return await asyncio.to_thread(self._collect_sync)
+
+    def _collect_sync(self) -> dict[str, Any]:
+        import pythoncom  # type: ignore[import-untyped]
+        import wmi  # type: ignore[import-untyped]
+
+        pythoncom.CoInitialize()
+        try:
+            try:
+                conn = wmi.WMI(namespace=r"root\dcim\sysman")
+            except Exception:
+                if self._available is not False:
+                    logger.warning("Dell DCM WMI namespace lost")
+                    self._available = False
+                return {}
+
+            now = time.time()
+            metrics: dict[str, Any] = {}
+
+            self._collect_thermals(conn, metrics, now)
+            self._collect_fans(conn, metrics, now)
+            self._collect_power(conn, metrics, now)
+
+            return metrics
+        except Exception:
+            logger.exception("Dell DCM collection failed")
+            return {}
+        finally:
+            pythoncom.CoUninitialize()
+
+    def _collect_thermals(
+        self, conn: object, metrics: dict[str, Any], now: float
+    ) -> None:
+        """Query DCIM_NumericSensor for temperature readings."""
+        try:
+            sensors = conn.query(  # type: ignore[attr-defined]
+                "SELECT * FROM DCIM_NumericSensor WHERE SensorType = 2"
+            )
+            for sensor in sensors:
+                name = getattr(sensor, "ElementName", "") or ""
+                value = getattr(sensor, "CurrentReading", None)
+                if value is None:
+                    continue
+
+                unit_modifier = int(getattr(sensor, "UnitModifier", 0) or 0)
+                raw = float(value)
+                temp = raw if unit_modifier == -1 else raw * (10**unit_modifier)
+
+                if temp < -40 or temp > 200:
+                    continue
+
+                key = _normalize_sensor_name(name)
+                metrics[key] = metric_value(round(temp, 1), unit="Cel")
+
+        except Exception:
+            logger.debug("DCM thermal query failed", exc_info=True)
+
+    def _collect_fans(
+        self, conn: object, metrics: dict[str, Any], now: float
+    ) -> None:
+        """Query DCIM_NumericSensor for fan RPM readings."""
+        try:
+            sensors = conn.query(  # type: ignore[attr-defined]
+                "SELECT * FROM DCIM_NumericSensor WHERE SensorType = 5"
+            )
+            for i, sensor in enumerate(sensors):
+                name = getattr(sensor, "ElementName", "") or ""
+                value = getattr(sensor, "CurrentReading", None)
+                if value is None:
+                    continue
+
+                lower_name = name.lower()
+                if "cpu" in lower_name:
+                    key = "fan.cpu"
+                elif "gpu" in lower_name or "video" in lower_name:
+                    key = "fan.gpu"
+                else:
+                    key = f"fan.{i}"
+
+                metrics[key] = metric_value(float(value), unit="/min")
+
+        except Exception:
+            logger.debug("DCM fan query failed", exc_info=True)
+
+    def _collect_power(
+        self, conn: object, metrics: dict[str, Any], now: float
+    ) -> None:
+        """Query power-related DCM classes."""
+        try:
+            supplies = conn.query(  # type: ignore[attr-defined]
+                "SELECT * FROM DCIM_PowerSupply"
+            )
+            for ps in supplies:
+                watts = getattr(ps, "TotalOutputPower", None)
+                if watts is not None:
+                    metrics["power.ac_adapter_watts"] = metric_value(
+                        float(watts), unit="W"
+                    )
+
+            power_sources = conn.query(  # type: ignore[attr-defined]
+                "SELECT * FROM DCIM_PowerSource"
+            )
+            for src in power_sources:
+                status = getattr(src, "PowerState", None)
+                if status is not None:
+                    state = "ac" if int(status) == 2 else "battery"
+                    metrics["power.source"] = metric_value(state)
+
+        except Exception:
+            if not self._power_warned:
+                logger.info("DCM power classes not available on this model")
+                self._power_warned = True
+
+    async def teardown(self) -> None:
+        self._available = False
+
+
+COLLECTOR_CLASS = DellDcmCollector

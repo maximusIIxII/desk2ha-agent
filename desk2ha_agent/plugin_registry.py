@@ -27,9 +27,8 @@ COLLECTOR_MODULES: list[str] = [
     "desk2ha_agent.collector.generic.hid_battery",
     "desk2ha_agent.collector.generic.headsetcontrol",
     "desk2ha_agent.collector.generic.usb_pd",
-    # Vendor (lazy-loaded) -- to be added
-    # "desk2ha_agent.collector.vendor.dell_dcm",
-    # ...
+    # Vendor plugins
+    "desk2ha_agent.collector.vendor.dell_dcm",
 ]
 
 
