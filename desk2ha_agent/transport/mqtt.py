@@ -233,10 +233,12 @@ class MqttTransport(Transport):
         config: MqttConfig,
         state: StateCache,
         info_provider: DeviceInfoProvider | None = None,
+        scheduler: Any = None,
     ) -> None:
         self._config = config
         self._state = state
         self._info_provider = info_provider
+        self._scheduler = scheduler
         self._client: mqtt_client.Client | None = None
         self._connected = False
         self._discovery_published = False
@@ -318,6 +320,11 @@ class MqttTransport(Transport):
 
         # Publish availability
         client.publish(self._topic("availability"), payload="online", qos=1, retain=True)
+
+        # Subscribe to command topic
+        cmd_topic = self._topic("command")
+        client.subscribe(cmd_topic, qos=1)
+        logger.info("MQTT subscribed to %s", cmd_topic)
 
         # Publish discovery on first connect
         if not self._discovery_published:
@@ -595,14 +602,49 @@ class MqttTransport(Transport):
         userdata: Any,
         msg: mqtt_client.MQTTMessage,
     ) -> None:
-        """Handle incoming MQTT messages (command topic). Stub for now."""
+        """Handle incoming MQTT messages (command topic)."""
         cmd_topic = self._topic("command")
         if msg.topic != cmd_topic:
             return
 
         try:
             payload = json.loads(msg.payload.decode())
-            command = payload["command"]
-            logger.info("Received MQTT command: %s (not yet wired)", command)
+            command = payload.get("command", "")
+            target = payload.get("target", "")
+            parameters = payload.get("parameters", {})
+
+            if not command:
+                logger.warning("MQTT command missing 'command' field")
+                return
+
+            logger.info("MQTT command received: %s target=%s", command, target)
+
+            if self._loop and self._scheduler:
+                asyncio.run_coroutine_threadsafe(
+                    self._execute_command(command, target, parameters),
+                    self._loop,
+                )
         except (json.JSONDecodeError, KeyError):
             logger.warning("Invalid command payload on %s", msg.topic)
+
+    async def _execute_command(
+        self, command: str, target: str, parameters: dict[str, Any]
+    ) -> None:
+        """Route MQTT command to the appropriate collector."""
+        if self._scheduler is None:
+            return
+
+        for collector in self._scheduler.collectors:
+            try:
+                result = await collector.execute_command(
+                    command, target, parameters
+                )
+                logger.info("MQTT command %s completed: %s", command, result)
+                return
+            except NotImplementedError:
+                continue
+            except Exception:
+                logger.exception("MQTT command %s failed", command)
+                return
+
+        logger.warning("No collector handles MQTT command: %s", command)

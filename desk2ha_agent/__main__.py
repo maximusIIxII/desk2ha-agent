@@ -125,7 +125,7 @@ async def _run(config_path: Path, *, service_mode: bool = False) -> None:
     if config.mqtt.enabled:
         from desk2ha_agent.transport.mqtt import MqttTransport
 
-        mqtt_transport = MqttTransport(config.mqtt, state, info_provider)
+        mqtt_transport = MqttTransport(config.mqtt, state, info_provider, scheduler)
         await mqtt_transport.start()
 
     # Zeroconf advertisement (if HTTP enabled)
