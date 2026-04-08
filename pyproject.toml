@@ -67,6 +67,9 @@ Issues = "https://github.com/maximusIIxII/desk2ha-agent/issues"
 target-version = "py311"
 line-length = 99
 
+[tool.ruff.lint.per-file-ignores]
+"desk2ha_agent/images/device_icons.py" = ["E501"]
+
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
