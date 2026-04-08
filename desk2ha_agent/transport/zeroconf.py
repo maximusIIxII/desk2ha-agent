@@ -11,6 +11,8 @@ import platform
 import socket
 from typing import TYPE_CHECKING
 
+from desk2ha_agent import __version__
+
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -63,7 +65,7 @@ class ZeroconfAdvertiser:
         properties = {
             "device_key": device_key,
             "hostname": hostname,
-            "version": "0.1.0",
+            "version": __version__,
         }
 
         # Add hardware info if available

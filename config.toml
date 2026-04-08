@@ -1,0 +1,31 @@
+# Desk2HA Agent — Production Configuration
+# Example Workstation (ST-EXAMPLE01)
+
+[agent]
+device_name = "auto"
+
+[http]
+enabled = true
+bind = "0.0.0.0"
+port = 9693
+auth_token = "REDACTED_TOKEN"
+
+[mqtt]
+enabled = true
+broker = "homeassistant.local"
+port = 1883
+username = "mqttuser"
+password_env = "DESK2HA_MQTT_PASS"
+base_topic = "desk2ha"
+ha_discovery_prefix = "homeassistant"
+
+[collectors]
+disabled = ["ble_battery"]
+
+[collectors.intervals]
+windows_platform = 30
+ddcci = 60
+usb_pd = 60
+
+[logging]
+level = "INFO"
