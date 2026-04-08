@@ -241,9 +241,7 @@ def _get_active_monitor_instance_ids() -> set[str]:
         while True:
             devinfo = SP_DEVINFO_DATA()
             devinfo.cbSize = ctypes.sizeof(SP_DEVINFO_DATA)
-            if not setupapi.SetupDiEnumDeviceInfo(
-                hdevinfo, idx, ctypes.byref(devinfo)
-            ):
+            if not setupapi.SetupDiEnumDeviceInfo(hdevinfo, idx, ctypes.byref(devinfo)):
                 break
             idx += 1
             buf = ctypes.create_unicode_buffer(512)
@@ -376,9 +374,7 @@ class DDCCICollector(Collector):
         """Read monitor identities (Windows only)."""
         if sys.platform == "win32":
             try:
-                self._monitor_ids = await asyncio.to_thread(
-                    _read_monitor_identities_registry
-                )
+                self._monitor_ids = await asyncio.to_thread(_read_monitor_identities_registry)
                 if self._monitor_ids:
                     logger.info(
                         "DDC/CI: identified %d monitor(s) via registry EDID",
@@ -416,9 +412,7 @@ class DDCCICollector(Collector):
                 if mid.get("model"):
                     metrics[f"{prefix}.model"] = metric_value(mid["model"])
                 if mid.get("manufacturer"):
-                    metrics[f"{prefix}.manufacturer"] = metric_value(
-                        mid["manufacturer"]
-                    )
+                    metrics[f"{prefix}.manufacturer"] = metric_value(mid["manufacturer"])
 
             try:
                 with monitor:
@@ -443,12 +437,8 @@ class DDCCICollector(Collector):
                     # Volume (VCP 0x62)
                     try:
                         vol_raw = monitor.vcp.get_vcp_feature(_VCP_VOLUME)
-                        vol_value = (
-                            vol_raw[0] if isinstance(vol_raw, tuple) else int(vol_raw)
-                        )
-                        metrics[f"{prefix}.volume"] = metric_value(
-                            float(vol_value), unit="%"
-                        )
+                        vol_value = vol_raw[0] if isinstance(vol_raw, tuple) else int(vol_raw)
+                        metrics[f"{prefix}.volume"] = metric_value(float(vol_value), unit="%")
                     except Exception:
                         pass
 
@@ -456,13 +446,9 @@ class DDCCICollector(Collector):
                     try:
                         power_raw = monitor.vcp.get_vcp_feature(_VCP_POWER_MODE)
                         power_int = (
-                            power_raw[0]
-                            if isinstance(power_raw, tuple)
-                            else int(power_raw)
+                            power_raw[0] if isinstance(power_raw, tuple) else int(power_raw)
                         )
-                        power_name = _VCP_TO_POWER_STATE.get(
-                            power_int, f"unknown_{power_int}"
-                        )
+                        power_name = _VCP_TO_POWER_STATE.get(power_int, f"unknown_{power_int}")
                         metrics[f"{prefix}.power_state"] = metric_value(power_name)
                     except Exception:
                         pass
@@ -482,11 +468,7 @@ class DDCCICollector(Collector):
                     # KVM select (VCP 0xE5)
                     try:
                         kvm_raw = monitor.vcp.get_vcp_feature(_VCP_KVM_SELECT)
-                        kvm_int = (
-                            kvm_raw[0]
-                            if isinstance(kvm_raw, tuple)
-                            else int(kvm_raw)
-                        )
+                        kvm_int = kvm_raw[0] if isinstance(kvm_raw, tuple) else int(kvm_raw)
                         kvm_name = _KVM_SELECT_MAP.get(kvm_int, f"unknown_{kvm_int}")
                         metrics[f"{prefix}.kvm_active_pc"] = metric_value(kvm_name)
                     except Exception:
@@ -495,11 +477,7 @@ class DDCCICollector(Collector):
                     # PBP/PIP mode (VCP 0xE0)
                     try:
                         pbp_raw = monitor.vcp.get_vcp_feature(_VCP_PBP_MODE)
-                        pbp_int = (
-                            pbp_raw[0]
-                            if isinstance(pbp_raw, tuple)
-                            else int(pbp_raw)
-                        )
+                        pbp_int = pbp_raw[0] if isinstance(pbp_raw, tuple) else int(pbp_raw)
                         pbp_name = _PBP_MODE_MAP.get(pbp_int, f"unknown_{pbp_int}")
                         metrics[f"{prefix}.pbp_mode"] = metric_value(pbp_name)
                     except Exception:
@@ -508,39 +486,23 @@ class DDCCICollector(Collector):
                     # Auto brightness (VCP 0xE3)
                     try:
                         ab_raw = monitor.vcp.get_vcp_feature(_VCP_AUTO_BRIGHTNESS)
-                        ab_int = (
-                            ab_raw[0]
-                            if isinstance(ab_raw, tuple)
-                            else int(ab_raw)
-                        )
-                        metrics[f"{prefix}.auto_brightness"] = metric_value(
-                            bool(ab_int)
-                        )
+                        ab_int = ab_raw[0] if isinstance(ab_raw, tuple) else int(ab_raw)
+                        metrics[f"{prefix}.auto_brightness"] = metric_value(bool(ab_int))
                     except Exception:
                         pass
 
                     # Auto color temperature (VCP 0xE6)
                     try:
                         act_raw = monitor.vcp.get_vcp_feature(_VCP_AUTO_COLOR_TEMP)
-                        act_int = (
-                            act_raw[0]
-                            if isinstance(act_raw, tuple)
-                            else int(act_raw)
-                        )
-                        metrics[f"{prefix}.auto_color_temp"] = metric_value(
-                            bool(act_int)
-                        )
+                        act_int = act_raw[0] if isinstance(act_raw, tuple) else int(act_raw)
+                        metrics[f"{prefix}.auto_color_temp"] = metric_value(bool(act_int))
                     except Exception:
                         pass
 
                     # Smart HDR (VCP 0xE9)
                     try:
                         hdr_raw = monitor.vcp.get_vcp_feature(_VCP_SMART_HDR)
-                        hdr_int = (
-                            hdr_raw[0]
-                            if isinstance(hdr_raw, tuple)
-                            else int(hdr_raw)
-                        )
+                        hdr_int = hdr_raw[0] if isinstance(hdr_raw, tuple) else int(hdr_raw)
                         metrics[f"{prefix}.smart_hdr"] = metric_value(hdr_int)
                     except Exception:
                         pass
@@ -548,11 +510,7 @@ class DDCCICollector(Collector):
                     # PowerNap (VCP 0xF0)
                     try:
                         pn_raw = monitor.vcp.get_vcp_feature(_VCP_POWER_NAP)
-                        pn_int = (
-                            pn_raw[0]
-                            if isinstance(pn_raw, tuple)
-                            else int(pn_raw)
-                        )
+                        pn_int = pn_raw[0] if isinstance(pn_raw, tuple) else int(pn_raw)
                         metrics[f"{prefix}.power_nap"] = metric_value(pn_int)
                     except Exception:
                         pass
@@ -574,23 +532,17 @@ class DDCCICollector(Collector):
 
         if command == "display.set_brightness":
             value = int(parameters["value"])
-            await asyncio.to_thread(
-                self._set_brightness_sync, get_monitors, display_index, value
-            )
+            await asyncio.to_thread(self._set_brightness_sync, get_monitors, display_index, value)
             return {"status": "completed"}
 
         if command == "display.set_contrast":
             value = int(parameters["value"])
-            await asyncio.to_thread(
-                self._set_contrast_sync, get_monitors, display_index, value
-            )
+            await asyncio.to_thread(self._set_contrast_sync, get_monitors, display_index, value)
             return {"status": "completed"}
 
         if command == "display.set_volume":
             value = int(parameters["value"])
-            await asyncio.to_thread(
-                self._set_volume_sync, get_monitors, display_index, value
-            )
+            await asyncio.to_thread(self._set_volume_sync, get_monitors, display_index, value)
             return {"status": "completed"}
 
         if command == "display.set_input_source":
@@ -602,80 +554,57 @@ class DDCCICollector(Collector):
 
         if command == "display.set_power_state":
             state = str(parameters["state"])
-            await asyncio.to_thread(
-                self._set_power_state_sync, get_monitors, display_index, state
-            )
+            await asyncio.to_thread(self._set_power_state_sync, get_monitors, display_index, state)
             return {"status": "completed"}
 
         raise NotImplementedError(f"Unknown command: {command}")
 
     @staticmethod
-    def _set_brightness_sync(
-        get_monitors: Any, display_index: int, value: int
-    ) -> None:
+    def _set_brightness_sync(get_monitors: Any, display_index: int, value: int) -> None:
         monitors = get_monitors()
         if display_index >= len(monitors):
-            raise ValueError(
-                f"Display index {display_index} out of range (have {len(monitors)})"
-            )
+            raise ValueError(f"Display index {display_index} out of range (have {len(monitors)})")
         with monitors[display_index]:
             monitors[display_index].set_luminance(value)
 
     @staticmethod
-    def _set_contrast_sync(
-        get_monitors: Any, display_index: int, value: int
-    ) -> None:
+    def _set_contrast_sync(get_monitors: Any, display_index: int, value: int) -> None:
         monitors = get_monitors()
         if display_index >= len(monitors):
-            raise ValueError(
-                f"Display index {display_index} out of range (have {len(monitors)})"
-            )
+            raise ValueError(f"Display index {display_index} out of range (have {len(monitors)})")
         with monitors[display_index]:
             monitors[display_index].set_contrast(value)
 
     @staticmethod
-    def _set_volume_sync(
-        get_monitors: Any, display_index: int, value: int
-    ) -> None:
+    def _set_volume_sync(get_monitors: Any, display_index: int, value: int) -> None:
         if not 0 <= value <= 100:
             raise ValueError(f"Volume must be 0-100, got {value}")
         monitors = get_monitors()
         if display_index >= len(monitors):
-            raise ValueError(
-                f"Display index {display_index} out of range (have {len(monitors)})"
-            )
+            raise ValueError(f"Display index {display_index} out of range (have {len(monitors)})")
         with monitors[display_index]:
             monitors[display_index].vcp.set_vcp_feature(_VCP_VOLUME, value)
 
     @staticmethod
-    def _set_input_source_sync(
-        get_monitors: Any, display_index: int, source_name: str
-    ) -> None:
+    def _set_input_source_sync(get_monitors: Any, display_index: int, source_name: str) -> None:
         raw = _resolve_input_source_to_raw(source_name)
         monitors = get_monitors()
         if display_index >= len(monitors):
-            raise ValueError(
-                f"Display index {display_index} out of range (have {len(monitors)})"
-            )
+            raise ValueError(f"Display index {display_index} out of range (have {len(monitors)})")
         with monitors[display_index]:
             monitors[display_index].set_input_source(raw)
 
     @staticmethod
-    def _set_power_state_sync(
-        get_monitors: Any, display_index: int, state: str
-    ) -> None:
+    def _set_power_state_sync(get_monitors: Any, display_index: int, state: str) -> None:
         state_lower = state.lower()
         if state_lower not in _POWER_STATE_TO_VCP:
             raise ValueError(
-                f"Unknown power state: {state!r}. "
-                f"Expected one of: {list(_POWER_STATE_TO_VCP)}"
+                f"Unknown power state: {state!r}. Expected one of: {list(_POWER_STATE_TO_VCP)}"
             )
         raw = _POWER_STATE_TO_VCP[state_lower]
         monitors = get_monitors()
         if display_index >= len(monitors):
-            raise ValueError(
-                f"Display index {display_index} out of range (have {len(monitors)})"
-            )
+            raise ValueError(f"Display index {display_index} out of range (have {len(monitors)})")
         with monitors[display_index]:
             monitors[display_index].vcp.set_vcp_feature(_VCP_POWER_MODE, raw)
 

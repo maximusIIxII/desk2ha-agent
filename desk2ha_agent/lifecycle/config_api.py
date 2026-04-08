@@ -65,9 +65,7 @@ def set_config_value(config_path: Path, section: str, key: str, value: Any) -> d
     # Determine if restart is needed
     hot_reload_keys = {"level", "token"}
     hot_reload_sections = {"logging"}
-    restart_required = not (
-        key in hot_reload_keys or section in hot_reload_sections
-    )
+    restart_required = not (key in hot_reload_keys or section in hot_reload_sections)
 
     logger.info("Config updated: [%s] %s = %s (was %s)", section, key, value, old_value)
     return {

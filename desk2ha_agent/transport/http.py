@@ -14,7 +14,7 @@ from desk2ha_agent import __version__
 from desk2ha_agent.transport.base import Transport
 
 if TYPE_CHECKING:
-    from desk2ha_agent.collector.base import Collector, DeviceInfoProvider, PeripheralProvider
+    from desk2ha_agent.collector.base import DeviceInfoProvider
     from desk2ha_agent.config import HttpConfig
     from desk2ha_agent.scheduler import Scheduler
     from desk2ha_agent.state import StateCache

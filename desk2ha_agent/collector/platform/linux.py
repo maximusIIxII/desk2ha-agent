@@ -170,13 +170,9 @@ class LinuxPlatformCollector(Collector):
             "architecture": platform.machine(),
         }
 
-        logger.info(
-            "Device identity: %s (%s) -- key=%s", model, serial, self._device_key
-        )
+        logger.info("Device identity: %s (%s) -- key=%s", model, serial, self._device_key)
 
-    def _collect_thermals(
-        self, metrics: dict[str, Any], now: float
-    ) -> None:
+    def _collect_thermals(self, metrics: dict[str, Any], now: float) -> None:
         """Read thermal zones and hwmon sensors."""
         # Thermal zones
         if _THERMAL_PATH.exists():
@@ -198,9 +194,7 @@ class LinuxPlatformCollector(Collector):
                 name = _read_sysfs(hwmon / "name") or ""
                 for temp_input in sorted(hwmon.glob("temp*_input")):
                     temp_str = _read_sysfs(temp_input)
-                    label_file = temp_input.with_name(
-                        temp_input.name.replace("_input", "_label")
-                    )
+                    label_file = temp_input.with_name(temp_input.name.replace("_input", "_label"))
                     label = _read_sysfs(label_file) or temp_input.stem
                     if temp_str is not None:
                         try:
@@ -217,18 +211,12 @@ class LinuxPlatformCollector(Collector):
                     if fan_str is not None:
                         try:
                             rpm = int(fan_str)
-                            idx = fan_input.stem.replace("fan", "").replace(
-                                "_input", ""
-                            )
-                            metrics[f"fan.{idx}"] = metric_value(
-                                float(rpm), unit="/min"
-                            )
+                            idx = fan_input.stem.replace("fan", "").replace("_input", "")
+                            metrics[f"fan.{idx}"] = metric_value(float(rpm), unit="/min")
                         except ValueError:
                             pass
 
-    def _collect_battery(
-        self, metrics: dict[str, Any], now: float
-    ) -> None:
+    def _collect_battery(self, metrics: dict[str, Any], now: float) -> None:
         """Read battery info from /sys/class/power_supply/."""
         if not _POWER_PATH.exists():
             return
@@ -240,9 +228,7 @@ class LinuxPlatformCollector(Collector):
 
             capacity = _read_sysfs(ps / "capacity")
             if capacity is not None:
-                metrics["battery.level_percent"] = metric_value(
-                    float(capacity), unit="%"
-                )
+                metrics["battery.level_percent"] = metric_value(float(capacity), unit="%")
 
             status = _read_sysfs(ps / "status")
             if status is not None:
@@ -252,9 +238,7 @@ class LinuxPlatformCollector(Collector):
                     "Full": "full",
                     "Not charging": "idle",
                 }
-                metrics["battery.state"] = metric_value(
-                    state_map.get(status, status.lower())
-                )
+                metrics["battery.state"] = metric_value(state_map.get(status, status.lower()))
 
             # Cycle count
             cycles = _read_sysfs(ps / "cycle_count")
@@ -276,9 +260,7 @@ class LinuxPlatformCollector(Collector):
 
             break  # Only first battery
 
-    def _collect_psutil_metrics(
-        self, metrics: dict[str, Any], now: float
-    ) -> None:
+    def _collect_psutil_metrics(self, metrics: dict[str, Any], now: float) -> None:
         """Collect cross-platform live metrics via psutil."""
         try:
             metrics["system.cpu_usage_percent"] = metric_value(
@@ -292,26 +274,18 @@ class LinuxPlatformCollector(Collector):
                 )
 
             vmem = psutil.virtual_memory()
-            metrics["system.ram_used_gb"] = metric_value(
-                round(vmem.used / 1024**3, 2), unit="GB"
-            )
+            metrics["system.ram_used_gb"] = metric_value(round(vmem.used / 1024**3, 2), unit="GB")
             metrics["system.ram_total_gb"] = metric_value(
                 round(vmem.total / 1024**3, 2), unit="GB"
             )
-            metrics["system.ram_usage_percent"] = metric_value(
-                vmem.percent, unit="%"
-            )
+            metrics["system.ram_usage_percent"] = metric_value(vmem.percent, unit="%")
 
             swap = psutil.swap_memory()
-            metrics["system.swap_usage_percent"] = metric_value(
-                swap.percent, unit="%"
-            )
+            metrics["system.swap_usage_percent"] = metric_value(swap.percent, unit="%")
 
             try:
                 disk = psutil.disk_usage("/")
-                metrics["system.disk_usage_percent"] = metric_value(
-                    disk.percent, unit="%"
-                )
+                metrics["system.disk_usage_percent"] = metric_value(disk.percent, unit="%")
                 metrics["system.disk_free_gb"] = metric_value(
                     round(disk.free / 1024**3, 2), unit="GB"
                 )

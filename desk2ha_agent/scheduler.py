@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
     from desk2ha_agent.collector.base import Collector
     from desk2ha_agent.state import StateCache
 
@@ -40,17 +41,13 @@ class Scheduler:
 
     async def start(self) -> None:
         for collector in self._collectors:
-            interval = self._intervals.get(
-                collector.meta.name, DEFAULT_INTERVAL
-            )
+            interval = self._intervals.get(collector.meta.name, DEFAULT_INTERVAL)
             task = asyncio.create_task(
                 self._poll_loop(collector, interval),
                 name=f"scheduler-{collector.meta.name}",
             )
             self._tasks.append(task)
-            logger.info(
-                "Started collector %s (interval=%.0fs)", collector.meta.name, interval
-            )
+            logger.info("Started collector %s (interval=%.0fs)", collector.meta.name, interval)
 
     async def stop(self) -> None:
         for task in self._tasks:
@@ -67,7 +64,8 @@ class Scheduler:
                     await self._state.update(metrics)
                     logger.debug(
                         "Collector %s returned %d metrics",
-                        collector.meta.name, len(metrics),
+                        collector.meta.name,
+                        len(metrics),
                     )
             except Exception:
                 logger.exception("Collector %s failed", collector.meta.name)

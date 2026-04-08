@@ -133,9 +133,7 @@ class DellDcmCollector(Collector):
         finally:
             pythoncom.CoUninitialize()
 
-    def _collect_thermals(
-        self, conn: object, metrics: dict[str, Any], now: float
-    ) -> None:
+    def _collect_thermals(self, conn: object, metrics: dict[str, Any], now: float) -> None:
         """Query DCIM_NumericSensor for temperature readings."""
         try:
             sensors = conn.query(  # type: ignore[attr-defined]
@@ -160,9 +158,7 @@ class DellDcmCollector(Collector):
         except Exception:
             logger.debug("DCM thermal query failed", exc_info=True)
 
-    def _collect_fans(
-        self, conn: object, metrics: dict[str, Any], now: float
-    ) -> None:
+    def _collect_fans(self, conn: object, metrics: dict[str, Any], now: float) -> None:
         """Query DCIM_NumericSensor for fan RPM readings."""
         try:
             sensors = conn.query(  # type: ignore[attr-defined]
@@ -187,9 +183,7 @@ class DellDcmCollector(Collector):
         except Exception:
             logger.debug("DCM fan query failed", exc_info=True)
 
-    def _collect_power(
-        self, conn: object, metrics: dict[str, Any], now: float
-    ) -> None:
+    def _collect_power(self, conn: object, metrics: dict[str, Any], now: float) -> None:
         """Query power-related DCM classes."""
         try:
             supplies = conn.query(  # type: ignore[attr-defined]
@@ -198,9 +192,7 @@ class DellDcmCollector(Collector):
             for ps in supplies:
                 watts = getattr(ps, "TotalOutputPower", None)
                 if watts is not None:
-                    metrics["power.ac_adapter_watts"] = metric_value(
-                        float(watts), unit="W"
-                    )
+                    metrics["power.ac_adapter_watts"] = metric_value(float(watts), unit="W")
 
             power_sources = conn.query(  # type: ignore[attr-defined]
                 "SELECT * FROM DCIM_PowerSource"

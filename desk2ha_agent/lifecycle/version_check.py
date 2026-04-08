@@ -12,9 +12,7 @@ from desk2ha_agent import __version__
 
 logger = logging.getLogger(__name__)
 
-GITHUB_RELEASES_URL = (
-    "https://api.github.com/repos/maximusIIxII/desk2ha-agent/releases/latest"
-)
+GITHUB_RELEASES_URL = "https://api.github.com/repos/maximusIIxII/desk2ha-agent/releases/latest"
 _TIMEOUT = 10
 
 

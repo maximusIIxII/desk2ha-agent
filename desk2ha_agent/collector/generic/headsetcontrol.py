@@ -50,7 +50,9 @@ class HeadsetControlCollector(Collector):
 
         try:
             proc = await asyncio.create_subprocess_exec(
-                exe, "--output", "json",
+                exe,
+                "--output",
+                "json",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -64,16 +66,14 @@ class HeadsetControlCollector(Collector):
             self._exe = exe
             self._device_count = len(devices)
             return True
-        except (json.JSONDecodeError, asyncio.TimeoutError):
+        except (TimeoutError, json.JSONDecodeError):
             return False
         except Exception:
             logger.debug("headsetcontrol probe failed", exc_info=True)
             return False
 
     async def setup(self) -> None:
-        logger.info(
-            "HeadsetControl: found %d device(s)", self._device_count
-        )
+        logger.info("HeadsetControl: found %d device(s)", self._device_count)
 
     async def collect(self) -> dict[str, Any]:
         if self._exe is None:
@@ -81,7 +81,9 @@ class HeadsetControlCollector(Collector):
 
         try:
             proc = await asyncio.create_subprocess_exec(
-                self._exe, "--output", "json",
+                self._exe,
+                "--output",
+                "json",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -93,7 +95,7 @@ class HeadsetControlCollector(Collector):
 
             data = json.loads(stdout)
             return self._parse_devices(data.get("devices", []))
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("headsetcontrol timed out")
             return {}
         except Exception:
@@ -123,23 +125,17 @@ class HeadsetControlCollector(Collector):
                 level = battery.get("level", -1)
 
                 if isinstance(level, (int, float)) and 0 <= level <= 100:
-                    metrics[f"{prefix}.battery_level"] = metric_value(
-                        float(level), unit="%"
-                    )
+                    metrics[f"{prefix}.battery_level"] = metric_value(float(level), unit="%")
 
                 if status:
-                    metrics[f"{prefix}.charging"] = metric_value(
-                        status.lower() == "charging"
-                    )
+                    metrics[f"{prefix}.charging"] = metric_value(status.lower() == "charging")
 
             # Capabilities / features
             caps = dev.get("capabilities", {})
 
             sidetone = caps.get("sidetone")
             if sidetone is not None and isinstance(sidetone, (int, float)):
-                metrics[f"{prefix}.sidetone"] = metric_value(
-                    int(sidetone), unit="level"
-                )
+                metrics[f"{prefix}.sidetone"] = metric_value(int(sidetone), unit="level")
 
             led = caps.get("lights")
             if led is not None:

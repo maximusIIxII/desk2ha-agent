@@ -27,13 +27,15 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description="Desk2HA Agent — multi-vendor desktop telemetry",
     )
     parser.add_argument(
-        "--config", "-c",
+        "--config",
+        "-c",
         type=Path,
         required=True,
         help="Path to TOML configuration file",
     )
     parser.add_argument(
-        "--version", "-V",
+        "--version",
+        "-V",
         action="version",
         version=f"desk2ha-agent {__version__}",
     )
@@ -50,6 +52,7 @@ def _hide_console_window() -> None:
         return
     try:
         import ctypes
+
         hwnd = ctypes.windll.kernel32.GetConsoleWindow()
         if hwnd:
             ctypes.windll.user32.ShowWindow(hwnd, 0)
@@ -58,9 +61,7 @@ def _hide_console_window() -> None:
 
 
 def _setup_logging(config_path: Path, level: str) -> None:
-    log_fmt = logging.Formatter(
-        "%(asctime)s %(levelname)-8s %(name)s: %(message)s"
-    )
+    log_fmt = logging.Formatter("%(asctime)s %(levelname)-8s %(name)s: %(message)s")
     root = logging.getLogger()
     root.setLevel(getattr(logging, level.upper(), logging.INFO))
 
@@ -115,6 +116,7 @@ async def _run(config_path: Path, *, service_mode: bool = False) -> None:
     http = None
     if config.http.enabled:
         from desk2ha_agent.transport.http import HttpTransport
+
         http = HttpTransport(config.http, state, scheduler, info_provider)
         await http.start()
 
@@ -122,6 +124,7 @@ async def _run(config_path: Path, *, service_mode: bool = False) -> None:
     mqtt_transport = None
     if config.mqtt.enabled:
         from desk2ha_agent.transport.mqtt import MqttTransport
+
         mqtt_transport = MqttTransport(config.mqtt, state, info_provider)
         await mqtt_transport.start()
 
@@ -130,6 +133,7 @@ async def _run(config_path: Path, *, service_mode: bool = False) -> None:
     if sys.platform == "win32" and not service_mode:
         try:
             from desk2ha_agent.tray.tray_helper import TrayIcon
+
             log_file = config_path.parent / "logs" / "desk2ha-agent.log"
             tray = TrayIcon(version=__version__, log_file=log_file)
             tray.start()
