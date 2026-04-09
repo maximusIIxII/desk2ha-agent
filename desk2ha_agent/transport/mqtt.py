@@ -350,6 +350,11 @@ class MqttTransport(Transport):
         client.subscribe(cmd_topic, qos=1)
         logger.info("MQTT subscribed to %s", cmd_topic)
 
+        # Subscribe to config topic for runtime configuration
+        config_topic = self._topic("config/set")
+        client.subscribe(config_topic, qos=1)
+        logger.info("MQTT subscribed to %s", config_topic)
+
         # Discovery is published on first state update (when metrics are available)
 
     def _on_disconnect(
@@ -636,7 +641,12 @@ class MqttTransport(Transport):
         userdata: Any,
         msg: mqtt_client.MQTTMessage,
     ) -> None:
-        """Handle incoming MQTT messages (command topic)."""
+        """Handle incoming MQTT messages (command + config topics)."""
+        config_topic = self._topic("config/set")
+        if msg.topic == config_topic:
+            self._handle_config_message(msg)
+            return
+
         cmd_topic = self._topic("command")
         if msg.topic != cmd_topic:
             return
@@ -653,6 +663,21 @@ class MqttTransport(Transport):
 
             logger.info("MQTT command received: %s target=%s", command, target)
 
+            # Agent-level commands handled directly (not routed to collectors)
+            if command in (
+                "system.lock",
+                "system.sleep",
+                "system.shutdown",
+                "system.hibernate",
+                "remote.wake_on_lan",
+            ):
+                if self._loop:
+                    asyncio.run_coroutine_threadsafe(
+                        self._execute_agent_command(command, parameters),
+                        self._loop,
+                    )
+                return
+
             if self._loop and self._scheduler:
                 asyncio.run_coroutine_threadsafe(
                     self._execute_command(command, target, parameters),
@@ -660,6 +685,74 @@ class MqttTransport(Transport):
                 )
         except (json.JSONDecodeError, KeyError):
             logger.warning("Invalid command payload on %s", msg.topic)
+
+    def _handle_config_message(self, msg: mqtt_client.MQTTMessage) -> None:
+        """Handle config topic messages for runtime configuration.
+
+        Expected payload: {"intervals": {"network": 10, "ddcci": 60}}
+        Publishes current config to config/state after applying changes.
+        """
+        try:
+            payload = json.loads(msg.payload.decode())
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            logger.warning("Invalid config payload on %s", msg.topic)
+            return
+
+        changed = False
+
+        # Update collector intervals
+        intervals = payload.get("intervals")
+        if isinstance(intervals, dict) and self._scheduler:
+            for name, interval in intervals.items():
+                if (
+                    isinstance(interval, int | float)
+                    and interval >= 1
+                    and self._scheduler.update_interval(name, float(interval))
+                ):
+                    changed = True
+
+        if changed:
+            logger.info("Config updated via MQTT")
+            # Publish current config state
+            self._publish_config_state()
+
+    def _publish_config_state(self) -> None:
+        """Publish current runtime config to config/state topic."""
+        if self._client is None or not self._connected:
+            return
+        state: dict[str, Any] = {}
+        if self._scheduler:
+            state["intervals"] = dict(self._scheduler._intervals)
+            state["collectors"] = [c.meta.name for c in self._scheduler.collectors]
+        try:
+            self._client.publish(
+                self._topic("config/state"),
+                payload=json.dumps(state),
+                qos=1,
+                retain=True,
+            )
+        except Exception:
+            logger.debug("Failed to publish config state", exc_info=True)
+
+    async def _execute_agent_command(self, command: str, parameters: dict[str, Any]) -> None:
+        """Handle agent-level commands (not routed to collectors)."""
+        from desk2ha_agent.lifecycle import system_actions
+
+        try:
+            if command == "remote.wake_on_lan":
+                mac = parameters.get("mac", "")
+                if mac:
+                    await system_actions.wake_on_lan(mac)
+            elif command == "system.lock":
+                await system_actions.lock_screen()
+            elif command == "system.sleep":
+                await system_actions.sleep_system()
+            elif command == "system.shutdown":
+                await system_actions.shutdown_system(parameters.get("delay", 0))
+            elif command == "system.hibernate":
+                await system_actions.hibernate_system()
+        except Exception:
+            logger.exception("Agent command %s failed", command)
 
     async def _execute_command(
         self, command: str, target: str, parameters: dict[str, Any]

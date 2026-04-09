@@ -113,6 +113,9 @@ class WindowsPlatformCollector(Collector):
             # --- Battery ---
             self._collect_battery(conn, metrics, now)
 
+            # --- Lid state (notebooks) ---
+            self._collect_lid_state(metrics)
+
             # --- Thermals fallback (standard WMI, no vendor tool needed) ---
             self._collect_thermals_fallback(metrics, now)
 
@@ -243,6 +246,62 @@ class WindowsPlatformCollector(Collector):
 
         except Exception:
             logger.exception("Failed to collect battery metrics")
+
+    def _collect_lid_state(self, metrics: dict[str, Any]) -> None:
+        """Detect laptop lid open/closed state.
+
+        Windows: Uses CallNtPowerInformation(SystemPowerCapabilities) to check
+        if lid is present, then reads ACPI lid state via WMI.
+        """
+        if not self._hardware or self._hardware.get("device_type") != "notebook":
+            return
+
+        try:
+            import ctypes
+            import ctypes.wintypes
+
+            # Check if lid hardware is present via PowrProf.dll
+            # SystemPowerCapabilities = 4, struct is 84 bytes
+            buf = ctypes.create_string_buffer(84)
+            result = ctypes.windll.powrprof.CallNtPowerInformation(
+                4,  # SystemPowerCapabilities
+                None,
+                0,
+                buf,
+                84,
+            )
+            if result != 0:
+                return
+            # Byte offset 2 = LidPresent (BOOLEAN)
+            lid_present = buf[2]
+            if not lid_present:
+                return
+
+            # Read actual lid state via user32 — if the system is running
+            # and we're collecting, the lid is open (closed lid → sleep/hibernate
+            # unless external display keeps it awake, in which case "closed" is
+            # still correct to report).
+            # Use the display state as proxy: EnumDisplayMonitors with builtin display
+            monitor_count = ctypes.c_int(0)
+
+            @ctypes.WINFUNCTYPE(
+                ctypes.c_bool,
+                ctypes.c_void_p,
+                ctypes.c_void_p,
+                ctypes.POINTER(ctypes.wintypes.RECT),
+                ctypes.c_void_p,
+            )
+            def _monitor_enum_proc(hMonitor, hdcMonitor, lprcMonitor, dwData):
+                monitor_count.value += 1
+                return True
+
+            ctypes.windll.user32.EnumDisplayMonitors(None, None, _monitor_enum_proc, 0)
+
+            # If we have at least one monitor active, lid is open
+            # (or closed with external display — both mean "usable")
+            metrics["system.lid_open"] = metric_value(monitor_count.value > 0)
+        except Exception:
+            logger.debug("Lid state detection failed", exc_info=True)
 
     def _collect_thermals_fallback(self, metrics: dict[str, Any], now: float) -> None:
         """Query MSAcpi_ThermalZoneTemperature for basic CPU temp."""

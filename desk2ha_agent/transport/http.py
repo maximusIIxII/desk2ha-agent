@@ -351,6 +351,18 @@ class HttpTransport(Transport):
             result = await action_map[command]()
             return web.json_response(result)
 
+        if command == "remote.wake_on_lan":
+            from desk2ha_agent.lifecycle.system_actions import wake_on_lan
+
+            mac = parameters.get("mac", "")
+            if not mac:
+                return web.json_response(
+                    {"error": "bad_request", "message": "Missing 'mac' parameter"},
+                    status=400,
+                )
+            result = await wake_on_lan(mac)
+            return web.json_response(result)
+
         if command == "agent.update":
             from desk2ha_agent.lifecycle.self_update import self_update
 

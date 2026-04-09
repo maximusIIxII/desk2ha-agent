@@ -33,7 +33,7 @@ class BLEBatteryCollector(Collector):
         name="ble_battery",
         tier=CollectorTier.GENERIC,
         platforms={Platform.LINUX, Platform.MACOS},
-        capabilities={"peripheral"},
+        capabilities={"peripheral", "control"},
         description="BLE GATT Battery Service 0x180F for wireless peripherals",
         optional_dependencies=["bleak"],
     )
@@ -59,10 +59,12 @@ class BLEBatteryCollector(Collector):
         logger.info("BLE battery collector ready (scan on demand)")
 
     async def collect(self) -> dict[str, Any]:
+        # Always report scanning state so HA can show the switch
+        metrics: dict[str, Any] = {
+            "system.ble_scanning": metric_value(self._enabled),
+        }
         if not self._enabled:
-            return {}
-
-        metrics: dict[str, Any] = {}
+            return metrics
 
         try:
             from bleak import BleakClient, BleakScanner
@@ -119,6 +121,16 @@ class BLEBatteryCollector(Collector):
             logger.debug("BLE scan failed", exc_info=True)
 
         return metrics
+
+    async def execute_command(
+        self, command: str, target: str, parameters: dict[str, Any]
+    ) -> dict[str, Any]:
+        if command == "ble.set_scanning":
+            enabled = bool(parameters.get("enabled", True))
+            self._enabled = enabled
+            logger.info("BLE scanning %s", "enabled" if enabled else "disabled")
+            return {"status": "completed", "scanning": enabled}
+        raise NotImplementedError
 
     async def teardown(self) -> None:
         self._known_devices.clear()

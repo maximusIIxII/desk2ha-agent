@@ -56,6 +56,15 @@ class Scheduler:
         self._tasks.clear()
         logger.info("All collectors stopped")
 
+    def update_interval(self, collector_name: str, interval: float) -> bool:
+        """Update the polling interval for a collector at runtime."""
+        if interval < 1.0:
+            return False
+        self._intervals[collector_name] = interval
+        # The poll loop reads self._intervals each cycle
+        logger.info("Interval for %s updated to %.0fs", collector_name, interval)
+        return True
+
     async def _poll_loop(self, collector: Collector, interval: float) -> None:
         while True:
             try:
@@ -69,4 +78,6 @@ class Scheduler:
                     )
             except Exception:
                 logger.exception("Collector %s failed", collector.meta.name)
-            await asyncio.sleep(interval)
+            # Re-read interval each cycle to support runtime changes
+            current_interval = self._intervals.get(collector.meta.name, interval)
+            await asyncio.sleep(current_interval)
