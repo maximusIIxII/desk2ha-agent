@@ -47,12 +47,22 @@ class NetworkCollector(Collector):
     async def collect(self) -> dict[str, Any]:
         metrics: dict[str, Any] = {}
 
-        # Interface stats
+        # Interface stats (skip loopback and virtual adapters)
         stats = psutil.net_if_stats()
+        counters = psutil.net_io_counters(pernic=True)
         for iface, st in stats.items():
             if not st.isup:
                 continue
-            slug = iface.lower().replace(" ", "_").replace("-", "_")[:20]
+            iface_lower = iface.lower()
+            # Skip loopback and common virtual adapters
+            if any(s in iface_lower for s in ("loopback", "lo", "isatap", "teredo", "6to4")):
+                continue
+            # Skip interfaces with no traffic (disconnected WiFi etc.)
+            io = counters.get(iface)
+            if io and io.bytes_sent == 0 and io.bytes_recv == 0:
+                continue
+
+            slug = iface_lower.replace(" ", "_").replace("-", "_")[:20]
 
             if st.speed > 0:
                 metrics[f"network.{slug}.speed_mbps"] = metric_value(float(st.speed), unit="Mbps")

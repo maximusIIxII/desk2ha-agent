@@ -1,8 +1,10 @@
 """Corsair iCUE vendor collector.
 
-Reads peripheral data from Corsair devices via the iCUE SDK or HID.
-Supports headsets (HS80, Void), keyboards (K70, K100), mice (Dark Core).
-Reports battery level, RGB mode, DPI, and firmware version.
+Reads peripheral data from Corsair devices. Uses the official iCUE SDK
+(cuesdk) when available to read battery levels and device details.
+Falls back to HID enumeration for basic device detection.
+
+Requires iCUE 4.31+ to be running for SDK features.
 """
 
 from __future__ import annotations
@@ -34,22 +36,27 @@ _KNOWN_PRODUCTS: dict[int, str] = {
     0x1BA6: "Slipstream Receiver",
 }
 
+# PIDs of wireless devices that may have battery
+_WIRELESS_PIDS = {0x1B65, 0x1B75, 0x1B76}
+
 
 class CorsairCollector(Collector):
-    """Collect metrics from Corsair peripherals via HID."""
+    """Collect metrics from Corsair peripherals via iCUE SDK + HID."""
 
     meta: ClassVar[CollectorMeta] = CollectorMeta(
         name="corsair_icue",
         tier=CollectorTier.VENDOR,
         platforms={Platform.WINDOWS, Platform.LINUX, Platform.MACOS},
         capabilities={"peripheral"},
-        description="Corsair iCUE peripheral metrics (battery, RGB, DPI)",
+        description="Corsair iCUE peripheral metrics (battery, device info)",
         requires_hardware="Corsair peripherals",
-        optional_dependencies=["hidapi"],
+        optional_dependencies=["hidapi", "cuesdk"],
     )
 
     def __init__(self) -> None:
         self._devices: list[dict[str, Any]] = []
+        self._sdk_available: bool = False
+        self._sdk: Any = None
 
     async def probe(self) -> bool:
         try:
@@ -67,6 +74,7 @@ class CorsairCollector(Collector):
                             "model": _KNOWN_PRODUCTS[pid],
                             "path": dev.get("path", b""),
                             "serial": dev.get("serial_number", ""),
+                            "wireless": pid in _WIRELESS_PIDS,
                         }
                     )
             return len(self._devices) > 0
@@ -80,16 +88,111 @@ class CorsairCollector(Collector):
         names = [d["model"] for d in self._devices]
         logger.info("Corsair: found %s", ", ".join(names))
 
+        # Try to connect to iCUE SDK for battery readings
+        self._sdk_available = await asyncio.to_thread(self._init_sdk)
+        if self._sdk_available:
+            logger.info("Corsair iCUE SDK connected")
+        else:
+            logger.info("Corsair iCUE SDK not available, using HID-only mode")
+
+    def _init_sdk(self) -> bool:
+        """Try to initialize the Corsair iCUE SDK."""
+        try:
+            from cuesdk import CueSdk
+
+            sdk = CueSdk()
+
+            def on_state_changed(evt: Any) -> None:
+                pass
+
+            sdk.connect(on_state_changed)
+
+            # Give SDK time to connect
+            import time
+
+            time.sleep(0.5)
+
+            # Check if we can list devices
+            devices, err = sdk.get_devices()
+            if err is None and devices:
+                self._sdk = sdk
+                return True
+
+            sdk.disconnect()
+        except ImportError:
+            logger.debug("cuesdk not installed")
+        except Exception:
+            logger.debug("iCUE SDK init failed", exc_info=True)
+        return False
+
     async def collect(self) -> dict[str, Any]:
         metrics: dict[str, Any] = {}
+
+        # Basic device info from HID
         for i, dev in enumerate(self._devices):
             prefix = f"peripheral.corsair_{i}"
             metrics[f"{prefix}.model"] = metric_value(dev["model"])
             metrics[f"{prefix}.manufacturer"] = metric_value("Corsair")
             metrics[f"{prefix}.vid_pid"] = metric_value(f"1B1C:{dev['pid']:04X}")
+
+        # Battery from iCUE SDK
+        if self._sdk_available and self._sdk is not None:
+            battery_data = await asyncio.to_thread(self._read_batteries)
+            metrics.update(battery_data)
+
         return metrics
 
+    def _read_batteries(self) -> dict[str, Any]:
+        """Read battery levels from iCUE SDK."""
+        metrics: dict[str, Any] = {}
+        try:
+            from cuesdk import CorsairDevicePropertyId
+
+            devices, err = self._sdk.get_devices()
+            if err is not None or not devices:
+                return metrics
+
+            for sdk_dev in devices:
+                # Match SDK device to our HID-discovered devices by model name
+                sdk_model = (sdk_dev.model or "").strip()
+                matched_idx = self._match_device(sdk_model)
+                if matched_idx is None:
+                    continue
+
+                prefix = f"peripheral.corsair_{matched_idx}"
+
+                # Read battery level
+                try:
+                    prop, err = self._sdk.get_device_property(
+                        sdk_dev.id,
+                        CorsairDevicePropertyId.CDPI_BatteryLevel,
+                    )
+                    if err is None and prop is not None:
+                        metrics[f"{prefix}.battery"] = metric_value(float(prop.value), unit="%")
+                except Exception:
+                    logger.debug("Battery read failed for %s", sdk_model, exc_info=True)
+
+        except Exception:
+            logger.debug("iCUE battery collection failed", exc_info=True)
+
+        return metrics
+
+    def _match_device(self, sdk_model: str) -> int | None:
+        """Match SDK device model to HID-discovered device index."""
+        sdk_lower = sdk_model.lower()
+        for i, dev in enumerate(self._devices):
+            if dev["model"].lower() in sdk_lower or sdk_lower in dev["model"].lower():
+                return i
+        return None
+
     async def teardown(self) -> None:
+        if self._sdk is not None:
+            import contextlib
+
+            with contextlib.suppress(Exception):
+                self._sdk.disconnect()
+            self._sdk = None
+        self._sdk_available = False
         self._devices = []
 
 
