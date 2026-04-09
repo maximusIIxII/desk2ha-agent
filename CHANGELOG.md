@@ -3,7 +3,7 @@
 All notable changes to the Desk2HA Agent will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji categories.
 
-## [Unreleased]
+## [0.4.1] - 2026-04-09
 
 ### 🐛 Bug fixes
 - DDC/CI `execute_command` now rejects non-display commands (was crashing on Litra commands)
