@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from aiohttp import web
@@ -23,6 +25,28 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PORT = 9694
 COLLECT_INTERVAL = 30.0
+HELPER_SECRET_ENV = "DESK2HA_HELPER_SECRET"
+
+_Handler = Callable[[web.Request], Awaitable[web.StreamResponse]]
+
+
+def _helper_auth_middleware(secret: str) -> Any:
+    """Middleware that checks Bearer token on helper requests."""
+
+    @web.middleware
+    async def middleware(
+        request: web.Request,
+        handler: _Handler,
+    ) -> web.StreamResponse:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header != f"Bearer {secret}":
+            return web.json_response(
+                {"error": "unauthorized", "message": "Missing or invalid bearer token"},
+                status=401,
+            )
+        return await handler(request)
+
+    return middleware
 
 
 class ElevatedHelper:
@@ -31,6 +55,7 @@ class ElevatedHelper:
     def __init__(self, port: int = DEFAULT_PORT, bind: str = "127.0.0.1") -> None:
         self._port = port
         self._bind = bind
+        self._secret = os.environ.get(HELPER_SECRET_ENV, "")
         self._collectors: list[Collector] = []
         self._metrics: dict[str, Any] = {}
         self._last_collect: float = 0.0
@@ -97,7 +122,12 @@ class ElevatedHelper:
         logger.info("Helper stopped")
 
     def _create_app(self) -> web.Application:
-        app = web.Application()
+        middlewares = []
+        if self._secret:
+            middlewares.append(_helper_auth_middleware(self._secret))
+        else:
+            logger.warning("No %s set — helper running without authentication", HELPER_SECRET_ENV)
+        app = web.Application(middlewares=middlewares)
         app.router.add_get("/health", self._handle_health)
         app.router.add_get("/metrics", self._handle_metrics)
         return app

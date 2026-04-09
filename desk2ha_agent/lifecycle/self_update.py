@@ -25,7 +25,16 @@ def _update_sync(version: str | None, source: str) -> dict[str, str]:
 
     try:
         result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "--upgrade", pkg],
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "--upgrade",
+                "--index-url",
+                "https://pypi.org/simple/",
+                pkg,
+            ],
             capture_output=True,
             text=True,
             timeout=120,

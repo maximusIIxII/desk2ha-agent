@@ -112,7 +112,7 @@ async def run_setup_wizard(
 
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", port)
+    site = web.TCPSite(runner, "127.0.0.1", port)
     await site.start()
 
     logger.info("Setup wizard running at http://localhost:%d/setup", port)
