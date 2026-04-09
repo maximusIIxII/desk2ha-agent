@@ -6,8 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji catego
 ## [0.5.1] - 2026-04-09
 
 ### 🐛 Bug fixes
-- **Litra HID wake-up**: Power-GET report no longer sent on every poll cycle — only once at startup, then cached. Prevents Litra Glow from turning on unexpectedly when the agent starts or reconnects.
-- Brightness/color temp reads skipped when light is off (reduces unnecessary HID traffic)
+- **Litra HID wake-up**: No HID reads during polling — any HID write (even GET requests) wakes the Litra Glow firmware. State is now tracked purely via command feedback (set_power, set_brightness, set_color_temp). Power defaults to off at agent start.
+- Brightness/color temp only reported when light is known to be on
 
 ## [0.5.0] - 2026-04-09
 
