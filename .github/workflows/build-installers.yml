@@ -19,10 +19,7 @@ jobs:
             pyinstaller_args: ""
           - os: macos-latest
             artifact: desk2ha-agent-macos-arm64
-            pyinstaller_args: "--target-arch arm64"
-          - os: macos-13
-            artifact: desk2ha-agent-macos-amd64
-            pyinstaller_args: "--target-arch x86_64"
+            pyinstaller_args: ""
           - os: ubuntu-latest
             artifact: desk2ha-agent-linux-amd64
             pyinstaller_args: ""
