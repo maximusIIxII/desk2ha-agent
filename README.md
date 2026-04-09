@@ -45,8 +45,9 @@ Collects hardware metrics, peripheral status, and display settings from Windows,
 | Vendor | HP WMI | BIOS settings, thermal profile (Windows) |
 | Vendor | Lenovo WMI | Thermal mode, battery thresholds (Windows + Linux sysfs) |
 | Vendor | Logitech Litra | Power, brightness (20-250 lm), color temp (2700-6500K) |
-| Vendor | Corsair iCUE | HS80, Void, K70, K100, Dark Core detection |
+| Vendor | Corsair iCUE | HS80, Void, K70, K100, Dark Core detection + battery via cuesdk |
 | Vendor | SteelSeries | Arctis Nova 7/Pro, Rival, Aerox, Apex detection |
+| Vendor | SteelSeries Sonar | Per-channel volume/mute, chat-mix via GG Sonar REST API (Windows) |
 | Vendor | Razer | DeathAdder, Viper, Huntsman, BlackWidow, Kraken detection |
 
 ## Installation
@@ -189,8 +190,10 @@ powershell -File scripts/install-helper-service.ps1
 ## Upcoming Features
 
 - **Prometheus endpoint**: `/metrics` in Prometheus scrape format
-- **More vendor battery support**: Corsair, SteelSeries, Razer battery levels via HID
+- **SteelSeries/Razer battery**: Battery levels via HID for wireless peripherals
 - **macOS Bluetooth**: CoreBluetooth support for paired device enumeration
+- **Logitech HID++**: Wireless peripheral metrics via HID++ protocol
+- **USB PD Dock Monitoring**: Thunderbolt/USB4 dock-specific metrics
 
 ## License
 
