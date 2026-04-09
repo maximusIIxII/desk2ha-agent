@@ -253,7 +253,10 @@ class BluetoothPeripheralCollector(Collector):
         existing_keys: set[str],
     ) -> dict[str, Any]:
         """Enumerate paired BT Classic devices not already found via BLE."""
-        from winrt.windows.devices.bluetooth import BluetoothDevice
+        from winrt.windows.devices.bluetooth import (
+            BluetoothConnectionStatus,
+            BluetoothDevice,
+        )
         from winrt.windows.devices.enumeration import DeviceInformation
 
         metrics: dict[str, Any] = {}
@@ -277,10 +280,20 @@ class BluetoothPeripheralCollector(Collector):
             if any(k.startswith(prefix) for k in existing_keys):
                 continue
 
+            # Check actual connection status via WinRT
+            connected = False
+            try:
+                bt_device = await BluetoothDevice.from_id_async(dev_info.id)
+                if bt_device:
+                    connected = bt_device.connection_status == BluetoothConnectionStatus.CONNECTED
+                    bt_device.close()
+            except Exception:
+                logger.debug("Could not check connection for %s", name)
+
             metrics[f"{prefix}.model"] = metric_value(name)
             metrics[f"{prefix}.type"] = metric_value(_classify_device(name))
             metrics[f"{prefix}.transport"] = metric_value("classic")
-            metrics[f"{prefix}.connected"] = metric_value(True)
+            metrics[f"{prefix}.connected"] = metric_value(connected)
 
         return metrics
 

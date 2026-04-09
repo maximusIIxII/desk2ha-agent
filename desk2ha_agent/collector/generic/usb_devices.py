@@ -210,14 +210,23 @@ class USBDeviceCollector(Collector):
                 if friendly_mfg.startswith("(Standard"):
                     friendly_mfg = ""
 
-                prefix = f"peripheral.usb_{idx}"
+                # Build stable device ID from VID:PID (avoids index-shift issues)
+                if vid and pid:
+                    dev_id = f"usb_{vid.lower()}_{pid.lower()}"
+                else:
+                    dev_id = f"usb_{idx}"
+                    idx += 1
+
+                # Deduplicate: skip if we already emitted this device ID
+                prefix = f"peripheral.{dev_id}"
+                if f"{prefix}.model" in metrics:
+                    continue
+
                 metrics[f"{prefix}.model"] = metric_value(friendly_name)
                 if friendly_mfg:
                     metrics[f"{prefix}.manufacturer"] = metric_value(friendly_mfg)
                 if vid and pid:
                     metrics[f"{prefix}.vid_pid"] = metric_value(vid_pid_key)
-
-                idx += 1
 
             logger.debug("USB enumeration: found %d devices", idx)
             return metrics
@@ -258,13 +267,21 @@ class USBDeviceCollector(Collector):
                 if vid.upper() in _SKIP_VIDS:
                     continue
 
-                prefix = f"peripheral.usb_{idx}"
+                if vid and pid:
+                    dev_id = f"usb_{vid.lower()}_{pid.lower()}"
+                else:
+                    dev_id = f"usb_{idx}"
+                    idx += 1
+
+                prefix = f"peripheral.{dev_id}"
+                if f"{prefix}.model" in metrics:
+                    continue
+
                 metrics[f"{prefix}.model"] = metric_value(product)
                 if manufacturer:
                     metrics[f"{prefix}.manufacturer"] = metric_value(manufacturer)
                 if vid and pid:
                     metrics[f"{prefix}.vid_pid"] = metric_value(f"{vid}:{pid}")
-                idx += 1
 
             except Exception:
                 continue
