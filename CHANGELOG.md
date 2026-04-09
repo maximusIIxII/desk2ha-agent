@@ -3,6 +3,12 @@
 All notable changes to the Desk2HA Agent will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji categories.
 
+## [0.5.1] - 2026-04-09
+
+### 🐛 Bug fixes
+- **Litra HID wake-up**: Power-GET report no longer sent on every poll cycle — only once at startup, then cached. Prevents Litra Glow from turning on unexpectedly when the agent starts or reconnects.
+- Brightness/color temp reads skipped when light is off (reduces unnecessary HID traffic)
+
 ## [0.5.0] - 2026-04-09
 
 ### ✨ New features
