@@ -68,6 +68,13 @@ class CollectorsConfig(BaseModel):
     ble_battery: BleBatteryConfig = BleBatteryConfig()
 
 
+class ProvisioningConfig(BaseModel):
+    """Phone-home provisioning (auto-removed after first connect)."""
+
+    phone_home_url: str = ""
+    phone_home_token: str = ""
+
+
 class AgentSection(BaseModel):
     """Top-level [agent] section."""
 
@@ -90,6 +97,7 @@ class AgentConfig(BaseModel):
     mqtt: MqttConfig = MqttConfig()
     collectors: CollectorsConfig = CollectorsConfig()
     logging: LoggingConfig = LoggingConfig()
+    provisioning: ProvisioningConfig = ProvisioningConfig()
 
 
 def load_config(path: Path) -> AgentConfig:

@@ -146,6 +146,19 @@ async def _run(config_path: Path, *, service_mode: bool = False) -> None:
         mqtt_transport = MqttTransport(config.mqtt, state, info_provider, scheduler)
         await mqtt_transport.start()
 
+    # Phone-home provisioning (one-time, on first start from HA install)
+    if config.provisioning.phone_home_url and config.provisioning.phone_home_token:
+        from desk2ha_agent.lifecycle.phone_home import phone_home
+
+        logger.info("Provisioning: phoning home to %s", config.provisioning.phone_home_url)
+        await phone_home(
+            phone_home_url=config.provisioning.phone_home_url,
+            phone_home_token=config.provisioning.phone_home_token,
+            agent_port=config.http.port,
+            auth_token=config.http.auth_token or "",
+            config_path=config_path,
+        )
+
     # Zeroconf advertisement (if HTTP enabled)
     zeroconf_adv = None
     if config.http.enabled:
