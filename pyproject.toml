@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "desk2ha-agent"
-version = "0.4.0"
+version = "0.4.1"
 description = "Multi-vendor desktop telemetry agent for Home Assistant"
 readme = "README.md"
 license = "Apache-2.0"
