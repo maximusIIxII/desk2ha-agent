@@ -3,6 +3,16 @@
 All notable changes to the Desk2HA Agent will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji categories.
 
+## [0.5.0] - 2026-04-09
+
+### ✨ New features
+- **Bluetooth Peripheral Collector**: enumerate paired BLE + Classic devices on Windows (WinRT) and Linux/macOS (bleak), read GATT battery levels, auto-classify device types (keyboard, mouse, headset, earbuds)
+- **SteelSeries Sonar REST Bridge**: read volume/mute per channel + chat-mix from SteelSeries GG Sonar app via local REST API with auto-discovery of random port
+- **Corsair iCUE Battery**: read wireless device battery levels via official `cuesdk` (CDPI_BatteryLevel), graceful fallback to HID-only mode
+
+### 🔧 Improvements
+- Network collector filters loopback, virtual adapters, and interfaces with zero traffic
+
 ## [0.4.1] - 2026-04-09
 
 ### 🐛 Bug fixes
