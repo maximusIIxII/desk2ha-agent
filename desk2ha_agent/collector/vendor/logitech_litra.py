@@ -74,11 +74,6 @@ class LogitechLitraCollector(Collector):
 
     def __init__(self) -> None:
         self._devices: list[dict[str, Any]] = []
-        # State cache per device index.  ANY HID write (even a GET request) can
-        # wake the Litra Glow firmware and turn the light on.  Therefore we NEVER
-        # send HID reports during collect().  State is only updated when the user
-        # sends an explicit command (set_power, set_brightness, set_color_temp).
-        self._state: dict[int, dict[str, Any]] = {}
 
     async def probe(self) -> bool:
         try:
@@ -113,6 +108,8 @@ class LogitechLitraCollector(Collector):
         return await asyncio.to_thread(self._collect_sync)
 
     def _collect_sync(self) -> dict[str, Any]:
+        import hid
+
         metrics: dict[str, Any] = {}
 
         for i, dev_info in enumerate(self._devices):
@@ -122,26 +119,40 @@ class LogitechLitraCollector(Collector):
             metrics[f"{prefix}.model"] = metric_value(product)
             metrics[f"{prefix}.manufacturer"] = metric_value("Logitech")
 
-            # No HID reads — any HID write (even GET requests) wakes the Litra
-            # Glow firmware and turns the light on.  State is only updated when
-            # the user sends commands via execute_command().
-            state = self._state.get(i, {})
-            metrics[f"{prefix}.power"] = metric_value(state.get("power", False))
+            try:
+                h = hid.device()
+                h.open_path(dev_info["path"])
+                h.set_nonblocking(True)
 
-            if state.get("power"):
-                if "brightness" in state:
-                    lumen = state["brightness"]
-                    metrics[f"{prefix}.brightness_lumen"] = metric_value(float(lumen), unit="lm")
-                    pct = round(
-                        (lumen - _BRIGHTNESS_MIN) / (_BRIGHTNESS_MAX - _BRIGHTNESS_MIN) * 100
-                    )
-                    metrics[f"{prefix}.brightness_percent"] = metric_value(
-                        float(max(0, min(100, pct))), unit="%"
-                    )
-                if "color_temp" in state:
-                    metrics[f"{prefix}.color_temp"] = metric_value(
-                        float(state["color_temp"]), unit="K"
-                    )
+                power = self._read_value(h, _CMD_POWER_GET)
+                if power is not None:
+                    is_on = power > 0
+                    metrics[f"{prefix}.power"] = metric_value(is_on)
+
+                    if is_on:
+                        brightness = self._read_value(h, _CMD_BRIGHTNESS_GET)
+                        if brightness is not None:
+                            metrics[f"{prefix}.brightness_lumen"] = metric_value(
+                                float(brightness), unit="lm"
+                            )
+                            pct = round(
+                                (brightness - _BRIGHTNESS_MIN)
+                                / (_BRIGHTNESS_MAX - _BRIGHTNESS_MIN)
+                                * 100
+                            )
+                            metrics[f"{prefix}.brightness_percent"] = metric_value(
+                                float(max(0, min(100, pct))), unit="%"
+                            )
+
+                        color_temp = self._read_value(h, _CMD_COLOR_TEMP_GET)
+                        if color_temp is not None:
+                            metrics[f"{prefix}.color_temp"] = metric_value(
+                                float(color_temp), unit="K"
+                            )
+
+                h.close()
+            except Exception:
+                logger.debug("Failed to read Litra %d", i, exc_info=True)
 
         return metrics
 
@@ -194,20 +205,15 @@ class LogitechLitraCollector(Collector):
             h = hid.device()
             h.open_path(self._devices[idx]["path"])
 
-            state = self._state.setdefault(idx, {})
-
             if command == "litra.set_power":
                 on = bool(parameters.get("value", parameters.get("on", True)))
                 h.write(_build_report(_CMD_POWER_SET, 0x01 if on else 0x00))
-                state["power"] = on
 
             elif command == "litra.set_brightness":
                 lumen = int(parameters.get("value", parameters.get("lumen", 100)))
                 lumen = max(_BRIGHTNESS_MIN, min(_BRIGHTNESS_MAX, lumen))
                 hi, lo = _uint16_be(lumen)
                 h.write(_build_report(_CMD_BRIGHTNESS_SET, hi, lo))
-                state["brightness"] = lumen
-                state["power"] = True  # setting brightness implies on
 
             elif command == "litra.set_color_temp":
                 kelvin = int(parameters.get("value", parameters.get("kelvin", 4000)))
@@ -215,8 +221,6 @@ class LogitechLitraCollector(Collector):
                 kelvin = round(kelvin / 100) * 100
                 hi, lo = _uint16_be(kelvin)
                 h.write(_build_report(_CMD_COLOR_TEMP_SET, hi, lo))
-                state["color_temp"] = kelvin
-                state["power"] = True  # setting color temp implies on
 
             else:
                 h.close()
