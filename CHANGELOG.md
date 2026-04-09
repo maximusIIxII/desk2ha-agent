@@ -3,6 +3,11 @@
 All notable changes to the Desk2HA Agent will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji categories.
 
+## [0.6.1] - 2026-04-09
+
+### 🐛 Bug fixes
+- **Litra HID wake-up**: Power state cached internally — `Power-GET` HID command no longer sent during collect (was waking Litra Glow from off state as firmware side-effect)
+
 ## [0.6.0] - 2026-04-09
 
 ### ✨ New features
