@@ -74,6 +74,11 @@ class LogitechLitraCollector(Collector):
 
     def __init__(self) -> None:
         self._devices: list[dict[str, Any]] = []
+        # Cache last known power state per device to avoid HID wake-up side-effect.
+        # The Litra Glow firmware can interpret a power-GET HID report as a wake-up,
+        # turning the light on unexpectedly.  We only query power once at startup
+        # and then track it via set_power commands.
+        self._power_cache: dict[int, bool] = {}
 
     async def probe(self) -> bool:
         try:
@@ -124,30 +129,36 @@ class LogitechLitraCollector(Collector):
                 h.open_path(dev_info["path"])
                 h.set_nonblocking(True)
 
-                # Read power state
-                power = self._read_value(h, _CMD_POWER_GET)
-                if power is not None:
-                    is_on = power > 0
-                    metrics[f"{prefix}.power"] = metric_value(is_on)
+                # Power state: only query HID once (first collect), then use cache.
+                # This avoids the Litra Glow firmware wake-up side-effect where
+                # sending a power-GET report turns the light on.
+                if i not in self._power_cache:
+                    power = self._read_value(h, _CMD_POWER_GET)
+                    if power is not None:
+                        self._power_cache[i] = power > 0
+                is_on = self._power_cache.get(i, False)
+                metrics[f"{prefix}.power"] = metric_value(is_on)
 
-                # Read brightness
-                brightness = self._read_value(h, _CMD_BRIGHTNESS_GET)
-                if brightness is not None:
-                    metrics[f"{prefix}.brightness_lumen"] = metric_value(
-                        float(brightness), unit="lm"
-                    )
-                    # Also as percentage
-                    pct = round(
-                        (brightness - _BRIGHTNESS_MIN) / (_BRIGHTNESS_MAX - _BRIGHTNESS_MIN) * 100
-                    )
-                    metrics[f"{prefix}.brightness_percent"] = metric_value(
-                        float(max(0, min(100, pct))), unit="%"
-                    )
+                # Only read brightness/color_temp when light is on
+                # (avoids unnecessary HID traffic that could wake the device)
+                if is_on:
+                    brightness = self._read_value(h, _CMD_BRIGHTNESS_GET)
+                    if brightness is not None:
+                        metrics[f"{prefix}.brightness_lumen"] = metric_value(
+                            float(brightness), unit="lm"
+                        )
+                        pct = round(
+                            (brightness - _BRIGHTNESS_MIN)
+                            / (_BRIGHTNESS_MAX - _BRIGHTNESS_MIN)
+                            * 100
+                        )
+                        metrics[f"{prefix}.brightness_percent"] = metric_value(
+                            float(max(0, min(100, pct))), unit="%"
+                        )
 
-                # Read color temperature
-                color_temp = self._read_value(h, _CMD_COLOR_TEMP_GET)
-                if color_temp is not None:
-                    metrics[f"{prefix}.color_temp"] = metric_value(float(color_temp), unit="K")
+                    color_temp = self._read_value(h, _CMD_COLOR_TEMP_GET)
+                    if color_temp is not None:
+                        metrics[f"{prefix}.color_temp"] = metric_value(float(color_temp), unit="K")
 
                 h.close()
             except Exception:
@@ -207,6 +218,7 @@ class LogitechLitraCollector(Collector):
             if command == "litra.set_power":
                 on = bool(parameters.get("value", parameters.get("on", True)))
                 h.write(_build_report(_CMD_POWER_SET, 0x01 if on else 0x00))
+                self._power_cache[idx] = on
 
             elif command == "litra.set_brightness":
                 lumen = int(parameters.get("value", parameters.get("lumen", 100)))
