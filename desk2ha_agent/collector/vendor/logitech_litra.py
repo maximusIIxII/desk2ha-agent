@@ -4,6 +4,12 @@ Controls and reads Logitech Litra desk lamps via USB HID.
 Supports power on/off, brightness (20-250 lumen), and color
 temperature (2700-6500K).
 
+IMPORTANT: The HID Power-GET command (0x01) wakes the Litra Glow from
+off state as a firmware side-effect.  Power state is therefore tracked
+internally via a cache that is only updated by explicit SET commands.
+Brightness and color-temp are still read via HID GET, but only when
+the cached power state is ON.
+
 Protocol reference: github.com/timrogers/litra-rs
 """
 
@@ -74,6 +80,10 @@ class LogitechLitraCollector(Collector):
 
     def __init__(self) -> None:
         self._devices: list[dict[str, Any]] = []
+        # Cached power state per device index.  None = unknown (never set),
+        # True = on, False = off.  Updated only by execute_command, never by
+        # HID reads (because Power-GET wakes the Litra Glow).
+        self._power_cache: dict[int, bool | None] = {}
 
     async def probe(self) -> bool:
         try:
@@ -119,36 +129,36 @@ class LogitechLitraCollector(Collector):
             metrics[f"{prefix}.model"] = metric_value(product)
             metrics[f"{prefix}.manufacturer"] = metric_value("Logitech")
 
+            # Use cached power state — never send Power-GET (wakes the device).
+            cached_power = self._power_cache.get(i)
+            metrics[f"{prefix}.power"] = metric_value(
+                cached_power if cached_power is not None else False
+            )
+
+            # Only read brightness/color-temp when we know the light is on.
+            if not cached_power:
+                continue
+
             try:
                 h = hid.device()
                 h.open_path(dev_info["path"])
                 h.set_nonblocking(True)
 
-                power = self._read_value(h, _CMD_POWER_GET)
-                if power is not None:
-                    is_on = power > 0
-                    metrics[f"{prefix}.power"] = metric_value(is_on)
+                brightness = self._read_value(h, _CMD_BRIGHTNESS_GET)
+                if brightness is not None:
+                    metrics[f"{prefix}.brightness_lumen"] = metric_value(
+                        float(brightness), unit="lm"
+                    )
+                    pct = round(
+                        (brightness - _BRIGHTNESS_MIN) / (_BRIGHTNESS_MAX - _BRIGHTNESS_MIN) * 100
+                    )
+                    metrics[f"{prefix}.brightness_percent"] = metric_value(
+                        float(max(0, min(100, pct))), unit="%"
+                    )
 
-                    if is_on:
-                        brightness = self._read_value(h, _CMD_BRIGHTNESS_GET)
-                        if brightness is not None:
-                            metrics[f"{prefix}.brightness_lumen"] = metric_value(
-                                float(brightness), unit="lm"
-                            )
-                            pct = round(
-                                (brightness - _BRIGHTNESS_MIN)
-                                / (_BRIGHTNESS_MAX - _BRIGHTNESS_MIN)
-                                * 100
-                            )
-                            metrics[f"{prefix}.brightness_percent"] = metric_value(
-                                float(max(0, min(100, pct))), unit="%"
-                            )
-
-                        color_temp = self._read_value(h, _CMD_COLOR_TEMP_GET)
-                        if color_temp is not None:
-                            metrics[f"{prefix}.color_temp"] = metric_value(
-                                float(color_temp), unit="K"
-                            )
+                color_temp = self._read_value(h, _CMD_COLOR_TEMP_GET)
+                if color_temp is not None:
+                    metrics[f"{prefix}.color_temp"] = metric_value(float(color_temp), unit="K")
 
                 h.close()
             except Exception:
@@ -208,12 +218,14 @@ class LogitechLitraCollector(Collector):
             if command == "litra.set_power":
                 on = bool(parameters.get("value", parameters.get("on", True)))
                 h.write(_build_report(_CMD_POWER_SET, 0x01 if on else 0x00))
+                self._power_cache[idx] = on
 
             elif command == "litra.set_brightness":
                 lumen = int(parameters.get("value", parameters.get("lumen", 100)))
                 lumen = max(_BRIGHTNESS_MIN, min(_BRIGHTNESS_MAX, lumen))
                 hi, lo = _uint16_be(lumen)
                 h.write(_build_report(_CMD_BRIGHTNESS_SET, hi, lo))
+                self._power_cache[idx] = True  # setting brightness implies on
 
             elif command == "litra.set_color_temp":
                 kelvin = int(parameters.get("value", parameters.get("kelvin", 4000)))
