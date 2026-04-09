@@ -147,6 +147,7 @@ class HttpTransport(Transport):
         resp = {
             "schema_version": SCHEMA_VERSION,
             "agent_version": __version__,
+            "device_key": self._get_device_key(),
             "status": status,
             "uptime_seconds": uptime,
         }
