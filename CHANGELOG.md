@@ -3,6 +3,11 @@
 All notable changes to the Desk2HA Agent will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji categories.
 
+## [0.7.1] - 2026-04-09
+
+### 🐛 Bug fixes
+- **Health endpoint**: Added `device_key` to `/v1/health` response — enables HA Zeroconf discovery to deduplicate existing entries without auth
+
 ## [0.7.0] - 2026-04-09
 
 ### ✨ New features
