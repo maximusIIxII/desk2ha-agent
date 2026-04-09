@@ -3,6 +3,14 @@
 All notable changes to the Desk2HA Agent will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji categories.
 
+## [0.7.0] - 2026-04-09
+
+### ✨ New features
+- **Setup Wizard**: Web-based first-run UI at `localhost:9693/setup` — opens browser automatically, user enters pairing code, done
+- **Phone-Home Provisioning**: Agent POSTs connection details to HA on first start, then removes `[provisioning]` config section
+- **Standalone Installers**: PyInstaller build pipeline for Windows (.exe), macOS (universal), and Linux binaries — no Python required
+- **GitHub Actions CI**: `build-installers.yml` workflow auto-builds platform binaries on every tagged release
+
 ## [0.6.1] - 2026-04-09
 
 ### 🐛 Bug fixes
