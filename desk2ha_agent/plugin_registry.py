@@ -23,7 +23,7 @@ COLLECTOR_MODULES: list[str] = [
     # Generic (cross-platform)
     "desk2ha_agent.collector.generic.ddcci",
     "desk2ha_agent.collector.generic.uvc",
-    "desk2ha_agent.collector.generic.ble_battery",
+    "desk2ha_agent.collector.generic.bluetooth_peripheral",
     "desk2ha_agent.collector.generic.hid_battery",
     "desk2ha_agent.collector.generic.headsetcontrol",
     "desk2ha_agent.collector.generic.usb_pd",
