@@ -3,6 +3,11 @@
 All notable changes to the Desk2HA Agent will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji categories.
 
+## [0.7.2] - 2026-04-09
+
+### 🔧 Improvements
+- **Installer names**: `amd64` → `x64`, `arm64` → `apple-silicon` for clarity
+
 ## [0.7.1] - 2026-04-09
 
 ### 🐛 Bug fixes
