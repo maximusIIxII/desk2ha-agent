@@ -13,7 +13,7 @@ Collects hardware metrics, peripheral status, and display settings from Windows,
 ## Features
 
 - **Cross-platform**: Windows, Linux, macOS
-- **3-tier collector model**: Platform (OS) → Generic (DDC/CI, HID, BLE, UVC) → Vendor (Dell, HP, Lenovo, Logitech, Corsair, SteelSeries, Razer)
+- **3-tier collector model**: Platform (OS) → Generic (DDC/CI, HID, BLE, Bluetooth, UVC) → Vendor (Dell, HP, Lenovo, Logitech, Corsair, SteelSeries, Razer)
 - **Display control**: Brightness, contrast, volume, input source, KVM switch, PBP mode via DDC/CI
 - **Webcam control**: Brightness, contrast, saturation, white balance, focus, zoom, pan/tilt via UVC
 - **Litra control**: Power, brightness, color temperature for Logitech Litra Glow/Beam
@@ -37,7 +37,7 @@ Collects hardware metrics, peripheral status, and display settings from Windows,
 | Generic | USB PD | Charger connected, voltage, charging state |
 | Generic | HeadsetControl | Headset battery, sidetone, LED, chatmix |
 | Generic | HID Battery | USB peripheral battery levels |
-| Generic | BLE Battery | Bluetooth device batteries |
+| Generic | Bluetooth Peripheral | Paired BLE + Classic devices, GATT battery levels, device type classification |
 | Generic | Network | WiFi RSSI/signal/SSID, Ethernet speed |
 | Generic | USB Devices | Connected peripherals with VID/PID and friendly names |
 | Generic | Wireless Receiver | Dell Universal, Logitech Bolt/Unifying, Jabra Link, paired device count |
@@ -188,11 +188,9 @@ powershell -File scripts/install-helper-service.ps1
 
 ## Upcoming Features
 
-- **Custom Lovelace Card**: Dedicated dashboard card showing the full desk overview
-- **Product images Tier 3**: Fetch real product photos from vendor websites
-- **Bluetooth BLE enumeration**: Extend BLE battery collector with device discovery
 - **Prometheus endpoint**: `/metrics` in Prometheus scrape format
 - **More vendor battery support**: Corsair, SteelSeries, Razer battery levels via HID
+- **macOS Bluetooth**: CoreBluetooth support for paired device enumeration
 
 ## License
 
