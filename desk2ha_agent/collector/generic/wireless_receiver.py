@@ -135,13 +135,23 @@ class WirelessReceiverCollector(Collector):
         return await asyncio.to_thread(self._collect_sync)
 
     def _collect_sync(self) -> dict[str, Any]:
-        metrics: dict[str, Any] = {}
+        from desk2ha_agent.peripheral_db import lookup_peripheral
 
-        for i, receiver in enumerate(self._receivers):
-            prefix = f"peripheral.receiver_{i}"
+        metrics: dict[str, Any] = {}
+        idx = 0
+
+        for receiver in self._receivers:
+            vid_pid = f"{receiver['vid']:04X}:{receiver['pid']:04X}"
+
+            # Skip receivers marked as suppressed in peripheral_db
+            spec = lookup_peripheral(vid_pid)
+            if spec and spec.suppress:
+                logger.debug("Suppressing receiver %s (%s)", receiver["name"], vid_pid)
+                continue
+
+            prefix = f"peripheral.receiver_{idx}"
             metrics[f"{prefix}.model"] = metric_value(receiver["name"])
             metrics[f"{prefix}.manufacturer"] = metric_value(receiver["manufacturer"])
-            vid_pid = f"{receiver['vid']:04X}:{receiver['pid']:04X}"
             metrics[f"{prefix}.vid_pid"] = metric_value(vid_pid)
             metrics[f"{prefix}.protocol"] = metric_value(receiver["protocol"])
             metrics[f"{prefix}.connected"] = metric_value(True)
@@ -154,6 +164,8 @@ class WirelessReceiverCollector(Collector):
                 paired = self._enumerate_logitech_devices(receiver)
                 if paired is not None:
                     metrics[f"{prefix}.paired_devices"] = metric_value(paired)
+
+            idx += 1
 
         return metrics
 

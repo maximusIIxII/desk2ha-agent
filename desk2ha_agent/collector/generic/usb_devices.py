@@ -18,6 +18,8 @@ from desk2ha_agent.collector.base import (
     Platform,
     metric_value,
 )
+from desk2ha_agent.peripheral_db import is_generic_name as _is_generic_name_db
+from desk2ha_agent.peripheral_db import lookup_manufacturer, lookup_peripheral
 
 logger = logging.getLogger(__name__)
 
@@ -166,23 +168,43 @@ class USBDeviceCollector(Collector):
                 if vid_pid_key in _SKIP_VID_PIDS:
                     continue
 
+                # Peripheral database lookup (normalised lowercase key)
+                vid_pid_lower = f"{vid.lower()}:{pid.lower()}"
+                spec = lookup_peripheral(vid_pid_lower)
+
+                # Suppress devices flagged in peripheral_db (receivers, embedded chips)
+                if spec and spec.suppress:
+                    continue
+
                 # Skip interface sub-devices (MI_01, MI_02, etc.)
                 if "&MI_" in did and not did.endswith("MI_00"):
                     continue
 
                 mfg = getattr(dev, "Manufacturer", "") or ""
 
-                # Use known device lookup for friendly names
-                known = _KNOWN_DEVICES.get(vid_pid_key)
-                if known:
-                    friendly_name, friendly_mfg = known
+                # Priority 1: peripheral_db spec (best metadata)
+                if spec:
+                    friendly_name = spec.model
+                    friendly_mfg = spec.manufacturer
                 else:
-                    friendly_name = name
-                    friendly_mfg = mfg
+                    # Priority 2: local _KNOWN_DEVICES table
+                    known = _KNOWN_DEVICES.get(vid_pid_key)
+                    if known:
+                        friendly_name, friendly_mfg = known
+                    else:
+                        friendly_name = name
+                        friendly_mfg = mfg
 
-                # Skip remaining generic USB devices without known mapping
-                if not known and _is_generic_name(friendly_name):
+                # Filter generic USB device names (from both databases)
+                if not spec and _is_generic_name(friendly_name):
                     continue
+                if _is_generic_name_db(friendly_name):
+                    continue
+
+                # VID-based manufacturer fallback from peripheral_db
+                if not friendly_mfg or friendly_mfg.startswith("(Standard"):
+                    vid_mfg = lookup_manufacturer(vid)
+                    friendly_mfg = vid_mfg or ""
 
                 # Skip generic Windows driver names as manufacturer
                 if friendly_mfg.startswith("(Standard"):
