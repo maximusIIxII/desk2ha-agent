@@ -3,6 +3,18 @@
 All notable changes to the Desk2HA Agent will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji categories.
 
+## [0.8.2] - 2026-04-09
+
+### 🔒 Security
+- **Helper process authentication**: Shared secret via `DESK2HA_HELPER_SECRET` env var — elevated helper no longer accepts unauthenticated requests
+- **Setup wizard localhost-only**: Binds to `127.0.0.1` instead of `0.0.0.0` — prevents remote access to setup wizard
+- **Shutdown delay validation**: Bounds-checked to 0–86400 seconds before passing to OS
+- **WoL MAC validation**: Regex validation rejects malformed MAC addresses
+- **Config API allowlist**: `auth_token`, `password` keys blocked from modification via API
+- **Self-update index pinning**: pip install uses `--index-url https://pypi.org/simple/` explicitly
+- **Phone-home plaintext warning**: Logs warning when using HTTP (not HTTPS) for phone-home
+- **Request body size limit**: HTTP API limited to 64KB per request (`client_max_size`)
+
 ## [0.8.1] - 2026-04-09
 
 ### 🐛 Bug fixes

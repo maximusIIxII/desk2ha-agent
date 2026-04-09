@@ -71,6 +71,7 @@ class HttpTransport(Transport):
         assert self._config.auth_token is not None
         app = web.Application(
             middlewares=[_bearer_auth_middleware(self._config.auth_token)],
+            client_max_size=65536,  # 64 KB request body limit
         )
         app.router.add_get("/v1/health", self._handle_health)
         app.router.add_get("/v1/info", self._handle_info)

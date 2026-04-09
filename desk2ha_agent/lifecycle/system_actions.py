@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import socket
 import subprocess
 import sys
@@ -80,6 +81,7 @@ def _sleep_sync() -> dict[str, str]:
 
 def _shutdown_sync(delay: int = 0) -> dict[str, str]:
     try:
+        delay = max(0, min(86400, int(delay)))
         if sys.platform == "win32":
             cmd = ["shutdown", "/s", "/t", str(delay)]
         elif sys.platform == "darwin":
@@ -114,6 +116,11 @@ async def wake_on_lan(mac: str) -> dict[str, str]:
 
 def _wol_sync(mac: str) -> dict[str, str]:
     try:
+        # Validate MAC format before processing
+        _MAC_RE = re.compile(r"^([0-9A-Fa-f]{2}[:\-.]){5}[0-9A-Fa-f]{2}$|^[0-9A-Fa-f]{12}$")
+        if not _MAC_RE.match(mac.strip()):
+            return {"status": "failed", "message": f"Invalid MAC address format: {mac}"}
+
         # Normalise MAC: accept "AA:BB:CC:DD:EE:FF", "AA-BB-CC-DD-EE-FF", "AABBCCDDEEFF"
         mac_clean = mac.replace(":", "").replace("-", "").replace(".", "").strip()
         if len(mac_clean) != 12:

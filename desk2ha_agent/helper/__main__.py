@@ -7,12 +7,14 @@ import asyncio
 import contextlib
 import logging
 import logging.handlers
+import os
+import secrets
 import signal
 import sys
 from pathlib import Path
 
 from desk2ha_agent import __version__
-from desk2ha_agent.helper.server import DEFAULT_PORT, ElevatedHelper
+from desk2ha_agent.helper.server import DEFAULT_PORT, HELPER_SECRET_ENV, ElevatedHelper
 
 logger = logging.getLogger("desk2ha_agent.helper")
 
@@ -90,6 +92,15 @@ async def _run(port: int, bind: str) -> None:
     if not _check_admin():
         logger.warning(
             "Helper is NOT running with admin privileges — elevated collectors may not work"
+        )
+
+    # Generate a shared secret if not already set (e.g. by a parent process)
+    if not os.environ.get(HELPER_SECRET_ENV):
+        generated_secret = secrets.token_urlsafe(32)
+        os.environ[HELPER_SECRET_ENV] = generated_secret
+        logger.info(
+            "Generated helper auth secret — set %s env var in the agent to connect",
+            HELPER_SECRET_ENV,
         )
 
     helper = ElevatedHelper(port=port, bind=bind)

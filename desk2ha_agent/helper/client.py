@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 import aiohttp
 
-from desk2ha_agent.helper.server import DEFAULT_PORT
+from desk2ha_agent.helper.server import DEFAULT_PORT, HELPER_SECRET_ENV
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +22,19 @@ class HelperClient:
         self._base_url = f"http://{host}:{port}"
         self._available: bool | None = None
 
+    def _auth_headers(self) -> dict[str, str]:
+        """Build auth headers from the shared secret env var."""
+        secret = os.environ.get(HELPER_SECRET_ENV, "")
+        if secret:
+            return {"Authorization": f"Bearer {secret}"}
+        return {}
+
     async def is_available(self) -> bool:
         """Check if the helper process is running."""
         try:
             async with (
                 aiohttp.ClientSession(timeout=_TIMEOUT) as session,
-                session.get(f"{self._base_url}/health") as resp,
+                session.get(f"{self._base_url}/health", headers=self._auth_headers()) as resp,
             ):
                 if resp.status == 200:
                     self._available = True
@@ -41,7 +49,7 @@ class HelperClient:
         try:
             async with (
                 aiohttp.ClientSession(timeout=_TIMEOUT) as session,
-                session.get(f"{self._base_url}/metrics") as resp,
+                session.get(f"{self._base_url}/metrics", headers=self._auth_headers()) as resp,
             ):
                 if resp.status == 200:
                     return await resp.json()

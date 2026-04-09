@@ -9,6 +9,9 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# Keys that must never be modified via the config API
+_FORBIDDEN_KEYS = frozenset({"auth_token", "auth_token_env", "password"})
+
 
 def get_config_summary(config_path: Path) -> dict[str, Any]:
     """Return redacted config summary (no secrets)."""
@@ -39,6 +42,9 @@ def set_config_value(config_path: Path, section: str, key: str, value: Any) -> d
 
     Returns dict with status and whether restart is required.
     """
+    if key in _FORBIDDEN_KEYS:
+        return {"status": "forbidden", "message": f"Key '{key}' cannot be modified via API"}
+
     try:
         with open(config_path, "rb") as f:
             raw = tomllib.load(f)

@@ -29,6 +29,9 @@ async def phone_home(
 
     Returns True if the phone-home was successful.
     """
+    if phone_home_url.startswith("http://"):
+        logger.warning("Phone-home uses plaintext HTTP — use on trusted networks only")
+
     hostname = socket.gethostname()
     # Determine local IP by connecting to the HA host
     ha_host = phone_home_url.split("//")[-1].split("/")[0].split(":")[0]
