@@ -15,13 +15,13 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            artifact: desk2ha-agent-windows-amd64.exe
+            artifact: desk2ha-agent-windows-x64.exe
             pyinstaller_args: ""
           - os: macos-latest
-            artifact: desk2ha-agent-macos-arm64
+            artifact: desk2ha-agent-macos-apple-silicon
             pyinstaller_args: ""
           - os: ubuntu-latest
-            artifact: desk2ha-agent-linux-amd64
+            artifact: desk2ha-agent-linux-x64
             pyinstaller_args: ""
 
     runs-on: ${{ matrix.os }}
