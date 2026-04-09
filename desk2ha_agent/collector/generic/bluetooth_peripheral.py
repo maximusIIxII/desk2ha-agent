@@ -9,6 +9,7 @@ On Linux/macOS: uses bleak for BLE scanning/connection.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import sys
 from typing import Any, ClassVar
@@ -113,8 +114,13 @@ class BluetoothPeripheralCollector(Collector):
 
     async def collect(self) -> dict[str, Any]:
         if sys.platform == "win32":
-            return await self._collect_windows()
+            # WinRT async APIs need their own event loop in a separate thread
+            return await asyncio.to_thread(self._collect_windows_sync)
         return await self._collect_bleak()
+
+    def _collect_windows_sync(self) -> dict[str, Any]:
+        """Run Windows collection in a thread with its own event loop."""
+        return asyncio.run(self._collect_windows())
 
     # ── Windows: WinRT Bluetooth API ──────────────────────────────
 
