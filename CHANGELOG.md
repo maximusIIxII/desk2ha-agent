@@ -6,8 +6,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji catego
 ## [0.5.1] - 2026-04-09
 
 ### 🐛 Bug fixes
-- **Litra HID wake-up**: No HID reads during polling — any HID write (even GET requests) wakes the Litra Glow firmware. State is now tracked purely via command feedback (set_power, set_brightness, set_color_temp). Power defaults to off at agent start.
-- Brightness/color temp only reported when light is known to be on
+- **Litra HID reads restored**: HID polling confirmed safe — reads do NOT wake the Litra. Previous false positive was caused by HA Light entity state restore. Brightness/color temp reads still skipped when light is off (reduces HID traffic).
 
 ## [0.5.0] - 2026-04-09
 
