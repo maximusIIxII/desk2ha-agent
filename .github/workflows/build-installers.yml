@@ -1,0 +1,104 @@
+name: Build Installers
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: desk2ha-agent-windows-amd64.exe
+            pyinstaller_args: ""
+          - os: macos-latest
+            artifact: desk2ha-agent-macos-arm64
+            pyinstaller_args: "--target-arch arm64"
+          - os: macos-13
+            artifact: desk2ha-agent-macos-amd64
+            pyinstaller_args: "--target-arch x86_64"
+          - os: ubuntu-latest
+            artifact: desk2ha-agent-linux-amd64
+            pyinstaller_args: ""
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pyinstaller
+          pip install -e ".[dev]"
+          # Platform-specific deps
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            pip install -e ".[windows]"
+          fi
+        shell: bash
+
+      - name: Create setup_wizard directory
+        run: mkdir -p desk2ha_agent/setup_wizard
+        shell: bash
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller \
+            --onefile \
+            --name "${{ matrix.artifact }}" \
+            --noconfirm \
+            --clean \
+            --add-data "desk2ha_agent/setup_wizard:desk2ha_agent/setup_wizard" \
+            --hidden-import desk2ha_agent.transport.http \
+            --hidden-import desk2ha_agent.transport.mqtt \
+            --hidden-import desk2ha_agent.transport.zeroconf \
+            --hidden-import desk2ha_agent.lifecycle.phone_home \
+            --hidden-import desk2ha_agent.lifecycle.self_update \
+            --hidden-import desk2ha_agent.lifecycle.service_manager \
+            --hidden-import desk2ha_agent.lifecycle.system_actions \
+            --hidden-import desk2ha_agent.lifecycle.config_api \
+            --hidden-import desk2ha_agent.lifecycle.version_check \
+            --hidden-import desk2ha_agent.setup_wizard.server \
+            --hidden-import pydantic \
+            --hidden-import aiohttp \
+            --hidden-import psutil \
+            --hidden-import zeroconf \
+            --exclude-module tkinter \
+            --exclude-module test \
+            ${{ matrix.pyinstaller_args }} \
+            desk2ha_agent/__main__.py
+        shell: bash
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f | sort
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: false
