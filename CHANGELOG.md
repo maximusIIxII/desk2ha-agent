@@ -3,6 +3,18 @@
 All notable changes to the Desk2HA Agent will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji categories.
 
+## [0.8.0] - 2026-04-09
+
+### ✨ New features
+- **Peripheral Spec Database**: Known device lookup by VID:PID with manufacturer, model, type, and parent/child relationships
+- **VID-based Manufacturer Fallback**: 14 vendor IDs mapped to correct manufacturer names (Dell, Logitech, Jabra, etc.)
+
+### 🔧 Improvements
+- **Composite Device Suppression**: ASIX AX88179 Ethernet (inside Dell DA305) no longer shown as separate device
+- **Receiver Suppression**: Dell Universal Receiver hidden (belongs to KB900/MS900 set)
+- **Generic USB Filtering**: Extended filter for German/English Windows driver names (USB-Massenspeichergerät, WinUsb-Gerät, etc.)
+- **Manufacturer Correction**: Windows driver class names ("WinUsb-Gerät") replaced with real manufacturer via VID lookup
+
 ## [0.7.2] - 2026-04-09
 
 ### 🔧 Improvements
