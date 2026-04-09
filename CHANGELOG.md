@@ -3,6 +3,11 @@
 All notable changes to the Desk2HA Agent will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji categories.
 
+## [0.8.3] - 2026-04-09
+
+### 🐛 Bug fixes
+- **Agent version always 0.6.0**: `__version__` was hardcoded instead of reading from package metadata — now uses `importlib.metadata.version()` so version always matches `pyproject.toml`
+
 ## [0.8.2] - 2026-04-09
 
 ### 🔒 Security
