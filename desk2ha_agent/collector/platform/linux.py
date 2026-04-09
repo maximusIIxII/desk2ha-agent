@@ -28,6 +28,7 @@ _DMI_PATH = Path("/sys/class/dmi/id")
 _THERMAL_PATH = Path("/sys/class/thermal")
 _POWER_PATH = Path("/sys/class/power_supply")
 _HWMON_PATH = Path("/sys/class/hwmon")
+_LID_PATH = Path("/proc/acpi/button/lid/LID0/state")
 
 
 def _read_sysfs(path: Path) -> str | None:
@@ -97,6 +98,7 @@ class LinuxPlatformCollector(Collector):
 
         self._collect_thermals(metrics, now)
         self._collect_battery(metrics, now)
+        self._collect_lid_state(metrics)
         self._collect_psutil_metrics(metrics, now)
 
         return metrics
@@ -259,6 +261,14 @@ class LinuxPlatformCollector(Collector):
                 )
 
             break  # Only first battery
+
+    def _collect_lid_state(self, metrics: dict[str, Any]) -> None:
+        """Read ACPI lid state from /proc/acpi/button/lid/LID0/state."""
+        state = _read_sysfs(_LID_PATH)
+        if state is not None:
+            # Format: "state:      open" or "state:      closed"
+            is_open = "open" in state.lower()
+            metrics["system.lid_open"] = metric_value(is_open)
 
     def _collect_psutil_metrics(self, metrics: dict[str, Any], now: float) -> None:
         """Collect cross-platform live metrics via psutil."""

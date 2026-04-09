@@ -1,9 +1,10 @@
-"""System-level actions: lock, sleep, shutdown, hibernate."""
+"""System-level actions: lock, sleep, shutdown, hibernate, wake-on-lan."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import socket
 import subprocess
 import sys
 
@@ -102,5 +103,33 @@ def _hibernate_sync() -> dict[str, str]:
             return {"status": "failed", "message": "Hibernate not supported on this platform"}
         logger.info("System hibernate triggered")
         return {"status": "completed", "action": "hibernate"}
+    except Exception as exc:
+        return {"status": "failed", "message": str(exc)}
+
+
+async def wake_on_lan(mac: str) -> dict[str, str]:
+    """Send a Wake-on-LAN magic packet to the given MAC address."""
+    return await asyncio.to_thread(_wol_sync, mac)
+
+
+def _wol_sync(mac: str) -> dict[str, str]:
+    try:
+        # Normalise MAC: accept "AA:BB:CC:DD:EE:FF", "AA-BB-CC-DD-EE-FF", "AABBCCDDEEFF"
+        mac_clean = mac.replace(":", "").replace("-", "").replace(".", "").strip()
+        if len(mac_clean) != 12:
+            return {"status": "failed", "message": f"Invalid MAC address: {mac}"}
+        mac_bytes = bytes.fromhex(mac_clean)
+
+        # Magic packet: 6 × 0xFF + 16 × MAC
+        magic = b"\xff" * 6 + mac_bytes * 16
+
+        # Send as UDP broadcast on port 9
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        sock.sendto(magic, ("<broadcast>", 9))
+        sock.close()
+
+        logger.info("WoL magic packet sent to %s", mac)
+        return {"status": "completed", "action": "wake_on_lan", "mac": mac}
     except Exception as exc:
         return {"status": "failed", "message": str(exc)}

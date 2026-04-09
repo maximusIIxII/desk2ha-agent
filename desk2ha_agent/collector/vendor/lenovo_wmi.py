@@ -36,8 +36,8 @@ class LenovoWmiCollector(Collector):
         name="lenovo_wmi",
         tier=CollectorTier.VENDOR,
         platforms={Platform.WINDOWS, Platform.LINUX},
-        capabilities={"thermals"},
-        description="Lenovo WMI/sysfs telemetry (thermals, fans, battery thresholds)",
+        capabilities={"thermals", "control"},
+        description="Lenovo WMI/sysfs telemetry (thermals, fans, battery mode)",
         requires_hardware="Lenovo ThinkPad/IdeaPad/Legion",
     )
 
@@ -134,6 +134,23 @@ class LenovoWmiCollector(Collector):
             except Exception:
                 logger.debug("Lenovo thermal profile query failed", exc_info=True)
 
+            # Battery conservation mode
+            try:
+                settings = conn.query(
+                    "SELECT * FROM Lenovo_BiosSetting "
+                    "WHERE CurrentSetting LIKE 'ChargeMode%' "
+                    "OR CurrentSetting LIKE 'Conservation%'"
+                )
+                for s in settings:
+                    val = getattr(s, "CurrentSetting", "")
+                    if val:
+                        parts = val.split(",")
+                        if len(parts) >= 2:
+                            metrics["battery.charge_mode"] = metric_value(parts[1])
+                            break
+            except Exception:
+                logger.debug("Lenovo battery mode query failed", exc_info=True)
+
             return metrics
         except Exception:
             logger.exception("Lenovo WMI collection failed")
@@ -197,7 +214,142 @@ class LenovoWmiCollector(Collector):
             except Exception:
                 pass
 
+        # Battery conservation mode (ThinkPad via sysfs, IdeaPad via ideapad_acpi)
+        conservation_path = _IDEAPAD_ACPI / "conservation_mode"
+        if conservation_path.exists():
+            try:
+                val = int(conservation_path.read_text().strip())
+                mode = "conservation" if val == 1 else "normal"
+                metrics["battery.charge_mode"] = metric_value(mode)
+            except Exception:
+                pass
+        elif self._is_linux_thinkpad:
+            # ThinkPad: infer mode from charge thresholds
+            start_path = Path("/sys/class/power_supply/BAT0/charge_control_start_threshold")
+            end_path = Path("/sys/class/power_supply/BAT0/charge_control_end_threshold")
+            if start_path.exists() and end_path.exists():
+                try:
+                    start = int(start_path.read_text().strip())
+                    end = int(end_path.read_text().strip())
+                    if end <= 60:
+                        mode = "conservation"
+                    elif end >= 95 and start <= 5:
+                        mode = "express"
+                    else:
+                        mode = "normal"
+                    metrics["battery.charge_mode"] = metric_value(mode)
+                except Exception:
+                    pass
+
         return metrics
+
+    async def execute_command(
+        self, command: str, target: str, parameters: dict[str, Any]
+    ) -> dict[str, Any]:
+        if command == "battery.set_charge_mode":
+            return await asyncio.to_thread(self._set_charge_mode, parameters)
+        if command == "lenovo.set_thermal_profile":
+            return await asyncio.to_thread(self._set_thermal_profile, parameters)
+        raise NotImplementedError
+
+    def _set_charge_mode(self, parameters: dict[str, Any]) -> dict[str, Any]:
+        """Set battery charge mode: conservation, normal, or express."""
+        mode = parameters.get("mode", "normal")
+        if mode not in ("conservation", "normal", "express"):
+            return {"status": "failed", "message": f"Unknown mode: {mode}"}
+
+        if sys.platform == "linux":
+            conservation_path = _IDEAPAD_ACPI / "conservation_mode"
+            if conservation_path.exists():
+                try:
+                    val = "1" if mode == "conservation" else "0"
+                    conservation_path.write_text(val)
+                    return {"status": "completed", "mode": mode}
+                except PermissionError:
+                    return {"status": "failed", "message": "Permission denied (need root)"}
+            elif self._is_linux_thinkpad:
+                thresholds = {
+                    "conservation": (0, 60),
+                    "normal": (0, 100),
+                    "express": (0, 100),
+                }
+                start, end = thresholds[mode]
+                try:
+                    start_path = Path(
+                        "/sys/class/power_supply/BAT0/charge_control_start_threshold"
+                    )
+                    end_path = Path("/sys/class/power_supply/BAT0/charge_control_end_threshold")
+                    end_path.write_text(str(end))
+                    start_path.write_text(str(start))
+                    return {"status": "completed", "mode": mode}
+                except PermissionError:
+                    return {"status": "failed", "message": "Permission denied (need root)"}
+
+        if sys.platform == "win32":
+            try:
+                import pythoncom
+                import wmi
+
+                pythoncom.CoInitialize()
+                try:
+                    conn = wmi.WMI(namespace=r"root\Lenovo\Lenovo_BiosSettingInterface")
+                    # WMI set method varies by model; this is a best-effort approach
+                    wmi_mode_map = {
+                        "conservation": "Conservation",
+                        "normal": "Normal",
+                        "express": "Express",
+                    }
+                    conn.Lenovo_SetBiosSetting(f"ChargeMode,{wmi_mode_map[mode]}")
+                    conn.Lenovo_SaveBiosSettings()
+                    return {"status": "completed", "mode": mode}
+                finally:
+                    pythoncom.CoUninitialize()
+            except Exception as exc:
+                return {"status": "failed", "message": str(exc)}
+
+        return {"status": "failed", "message": "Unsupported platform"}
+
+    def _set_thermal_profile(self, parameters: dict[str, Any]) -> dict[str, Any]:
+        """Set thermal profile via WMI or sysfs."""
+        profile = parameters.get("profile", "balanced")
+
+        if sys.platform == "linux":
+            perf_path = _IDEAPAD_ACPI / "performance_mode"
+            if perf_path.exists():
+                mode_map = {
+                    "intelligent_cooling": "0",
+                    "balanced": "0",
+                    "extreme_performance": "1",
+                    "performance": "1",
+                    "battery_saving": "2",
+                    "quiet": "2",
+                }
+                val = mode_map.get(profile)
+                if val is None:
+                    return {"status": "failed", "message": f"Unknown profile: {profile}"}
+                try:
+                    perf_path.write_text(val)
+                    return {"status": "completed", "profile": profile}
+                except PermissionError:
+                    return {"status": "failed", "message": "Permission denied (need root)"}
+
+        if sys.platform == "win32":
+            try:
+                import pythoncom
+                import wmi
+
+                pythoncom.CoInitialize()
+                try:
+                    conn = wmi.WMI(namespace=r"root\Lenovo\Lenovo_BiosSettingInterface")
+                    conn.Lenovo_SetBiosSetting(f"ThermalMode,{profile}")
+                    conn.Lenovo_SaveBiosSettings()
+                    return {"status": "completed", "profile": profile}
+                finally:
+                    pythoncom.CoUninitialize()
+            except Exception as exc:
+                return {"status": "failed", "message": str(exc)}
+
+        return {"status": "failed", "message": "Unsupported platform"}
 
     async def teardown(self) -> None:
         self._available = False

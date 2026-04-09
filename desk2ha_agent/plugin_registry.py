@@ -30,11 +30,13 @@ COLLECTOR_MODULES: list[str] = [
     "desk2ha_agent.collector.generic.network",
     "desk2ha_agent.collector.generic.usb_devices",
     "desk2ha_agent.collector.generic.wireless_receiver",
+    "desk2ha_agent.collector.generic.keyboard_backlight",
     # Vendor plugins
     "desk2ha_agent.collector.vendor.dell_dcm",
     "desk2ha_agent.collector.vendor.hp_wmi",
     "desk2ha_agent.collector.vendor.lenovo_wmi",
     "desk2ha_agent.collector.vendor.logitech_litra",
+    "desk2ha_agent.collector.vendor.logitech_hidpp",
     "desk2ha_agent.collector.vendor.corsair_icue",
     "desk2ha_agent.collector.vendor.steelseries",
     "desk2ha_agent.collector.vendor.steelseries_sonar",

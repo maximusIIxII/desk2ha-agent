@@ -3,6 +3,24 @@
 All notable changes to the Desk2HA Agent will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji categories.
 
+## [0.6.0] - 2026-04-09
+
+### ✨ New features
+- **Network Throughput**: Per-interface TX/RX bytes/s via psutil delta calculation
+- **Wake-on-LAN**: `remote.wake_on_lan` command sends magic packet to any MAC address (HTTP + MQTT)
+- **MQTT Config Topic**: Runtime configuration via `desk2ha/{key}/config/set` — update collector intervals without restart
+- **Lid Open Sensor**: Laptop lid state detection (Windows: PowrProf + EnumDisplayMonitors, Linux: `/proc/acpi/button/lid/`)
+- **Battery Charge Mode**: Read/set Lenovo conservation/normal/express battery mode (WMI + sysfs)
+- **BLE Scanning Switch**: Enable/disable BLE scanning at runtime via `ble.set_scanning` command
+- **Keyboard Backlight**: Read/set keyboard backlight level via Linux sysfs (`/sys/class/leds/*kbd_backlight*/`)
+- **Logitech HID++ Plugin**: Battery, DPI, and backlight for wireless Logitech peripherals via HID++ 2.0 protocol (Unifying/Bolt/Nano receivers)
+- **Peripheral DPI/Backlight Commands**: `peripheral.set_dpi` (100-25600) and `peripheral.set_backlight` (0-100) for HID++ devices
+
+### 🔧 Improvements
+- Scheduler supports runtime interval updates (re-reads interval each poll cycle)
+- MQTT transport routes system action commands directly (lock, sleep, shutdown, WoL) without collector routing
+- Network collector seeds initial counters in setup() for accurate first-cycle throughput
+
 ## [0.5.1] - 2026-04-09
 
 ### 🐛 Bug fixes

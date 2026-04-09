@@ -1,8 +1,8 @@
 """Network metrics collector.
 
-Reports WiFi signal strength (RSSI), Ethernet link speed, and
-active network interface information. Cross-platform via psutil
-and platform-specific tools.
+Reports WiFi signal strength (RSSI), Ethernet link speed, network
+throughput (bytes/s per interface), and active interface information.
+Cross-platform via psutil and platform-specific tools.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ import asyncio
 import logging
 import subprocess
 import sys
+import time
 from typing import Any, ClassVar
 
 import psutil
@@ -34,18 +35,30 @@ class NetworkCollector(Collector):
         tier=CollectorTier.GENERIC,
         platforms={Platform.WINDOWS, Platform.LINUX, Platform.MACOS},
         capabilities={"network"},
-        description="Network interface info, WiFi RSSI, Ethernet speed",
+        description="Network interface info, WiFi RSSI, Ethernet speed, throughput",
     )
+
+    def __init__(self) -> None:
+        self._prev_counters: dict[str, tuple[int, int]] = {}  # iface -> (sent, recv)
+        self._prev_time: float = 0.0
 
     async def probe(self) -> bool:
         addrs = psutil.net_if_addrs()
         return len(addrs) > 0
 
     async def setup(self) -> None:
+        # Seed initial counters so first collect can compute deltas
+        counters = psutil.net_io_counters(pernic=True)
+        for iface, io in counters.items():
+            self._prev_counters[iface] = (io.bytes_sent, io.bytes_recv)
+        self._prev_time = time.monotonic()
         logger.info("Network collector activated")
 
     async def collect(self) -> dict[str, Any]:
         metrics: dict[str, Any] = {}
+
+        now = time.monotonic()
+        elapsed = now - self._prev_time if self._prev_time > 0 else 0.0
 
         # Interface stats (skip loopback and virtual adapters)
         stats = psutil.net_if_stats()
@@ -66,6 +79,24 @@ class NetworkCollector(Collector):
 
             if st.speed > 0:
                 metrics[f"network.{slug}.speed_mbps"] = metric_value(float(st.speed), unit="Mbps")
+
+            # Throughput: bytes/s per interface
+            if io and elapsed > 0:
+                prev = self._prev_counters.get(iface)
+                if prev is not None:
+                    sent_bps = max(0.0, (io.bytes_sent - prev[0]) / elapsed)
+                    recv_bps = max(0.0, (io.bytes_recv - prev[1]) / elapsed)
+                    metrics[f"network.{slug}.tx_bytes_per_sec"] = metric_value(
+                        round(sent_bps, 1), unit="B/s"
+                    )
+                    metrics[f"network.{slug}.rx_bytes_per_sec"] = metric_value(
+                        round(recv_bps, 1), unit="B/s"
+                    )
+
+        # Update counters for next cycle
+        for iface, io in counters.items():
+            self._prev_counters[iface] = (io.bytes_sent, io.bytes_recv)
+        self._prev_time = now
 
         # WiFi signal strength (platform-specific)
         try:
