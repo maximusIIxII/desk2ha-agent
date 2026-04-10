@@ -27,6 +27,11 @@ async def shutdown_system(delay: int = 0) -> dict[str, str]:
     return await asyncio.to_thread(_shutdown_sync, delay)
 
 
+async def restart_system(delay: int = 0) -> dict[str, str]:
+    """Restart (reboot) the system."""
+    return await asyncio.to_thread(_restart_sync, delay)
+
+
 async def hibernate_system() -> dict[str, str]:
     """Hibernate the system."""
     return await asyncio.to_thread(_hibernate_sync)
@@ -91,6 +96,22 @@ def _shutdown_sync(delay: int = 0) -> dict[str, str]:
         subprocess.Popen(cmd)
         logger.info("System shutdown triggered (delay=%ds)", delay)
         return {"status": "completed", "action": "shutdown", "delay": delay}
+    except Exception as exc:
+        return {"status": "failed", "message": str(exc)}
+
+
+def _restart_sync(delay: int = 0) -> dict[str, str]:
+    try:
+        delay = max(0, min(86400, int(delay)))
+        if sys.platform == "win32":
+            cmd = ["shutdown", "/r", "/t", str(delay)]
+        elif sys.platform == "darwin":
+            cmd = ["sudo", "shutdown", "-r", f"+{max(1, delay // 60)}"]
+        else:
+            cmd = ["sudo", "shutdown", "-r", f"+{max(1, delay // 60)}"]
+        subprocess.Popen(cmd)
+        logger.info("System restart triggered (delay=%ds)", delay)
+        return {"status": "completed", "action": "restart", "delay": delay}
     except Exception as exc:
         return {"status": "failed", "message": str(exc)}
 
