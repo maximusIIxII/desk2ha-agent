@@ -120,7 +120,14 @@ def _get_input_source_options() -> list[str]:
 # Standard VCP codes
 # ---------------------------------------------------------------------------
 
+_VCP_FACTORY_RESET = 0x04
+_VCP_FACTORY_COLOR_RESET = 0x08
+_VCP_COLOR_PRESET = 0x14
 _VCP_VOLUME = 0x62
+_VCP_SHARPNESS = 0x87
+_VCP_AUDIO_MUTE = 0x8D
+_VCP_USAGE_HOURS = 0xC0
+_VCP_FIRMWARE_LEVEL = 0xC9
 _VCP_POWER_MODE = 0xD6
 
 _POWER_STATE_TO_VCP: dict[str, int] = {
@@ -129,6 +136,24 @@ _POWER_STATE_TO_VCP: dict[str, int] = {
     "off": 0x05,
 }
 _VCP_TO_POWER_STATE: dict[int, str] = {v: k for k, v in _POWER_STATE_TO_VCP.items()}
+
+# MCCS color preset values (VCP 0x14)
+_COLOR_PRESET_MAP: dict[int, str] = {
+    1: "sRGB",
+    2: "native",
+    3: "4000K",
+    4: "5000K",
+    5: "6500K",
+    6: "7500K",
+    7: "8200K",
+    8: "9300K",
+    9: "10000K",
+    10: "11500K",
+    11: "user1",
+    12: "user2",
+    13: "user3",
+}
+_COLOR_PRESET_TO_VCP: dict[str, int] = {v: k for k, v in _COLOR_PRESET_MAP.items()}
 
 # ---------------------------------------------------------------------------
 # Vendor-specific VCP codes (Dell proprietary)
@@ -515,6 +540,54 @@ class DDCCICollector(Collector):
                     except Exception:
                         pass
 
+                    # ── Standard MCCS codes (new) ──
+
+                    # Color preset (VCP 0x14)
+                    try:
+                        cp_raw = monitor.vcp.get_vcp_feature(_VCP_COLOR_PRESET)
+                        cp_int = cp_raw[0] if isinstance(cp_raw, tuple) else int(cp_raw)
+                        cp_name = _COLOR_PRESET_MAP.get(cp_int, f"unknown_{cp_int}")
+                        metrics[f"{prefix}.color_preset"] = metric_value(cp_name)
+                    except Exception:
+                        pass
+
+                    # Sharpness (VCP 0x87)
+                    try:
+                        sh_raw = monitor.vcp.get_vcp_feature(_VCP_SHARPNESS)
+                        sh_int = sh_raw[0] if isinstance(sh_raw, tuple) else int(sh_raw)
+                        metrics[f"{prefix}.sharpness"] = metric_value(float(sh_int), unit="%")
+                    except Exception:
+                        pass
+
+                    # Audio mute (VCP 0x8D) — MCCS: 1=unmuted, 2=muted
+                    try:
+                        am_raw = monitor.vcp.get_vcp_feature(_VCP_AUDIO_MUTE)
+                        am_int = am_raw[0] if isinstance(am_raw, tuple) else int(am_raw)
+                        metrics[f"{prefix}.audio_mute"] = metric_value(am_int == 2)
+                    except Exception:
+                        pass
+
+                    # Display usage hours (VCP 0xC0) — read-only diagnostic
+                    try:
+                        uh_raw = monitor.vcp.get_vcp_feature(_VCP_USAGE_HOURS)
+                        uh_int = uh_raw[0] if isinstance(uh_raw, tuple) else int(uh_raw)
+                        metrics[f"{prefix}.usage_hours"] = metric_value(uh_int, unit="h")
+                    except Exception:
+                        pass
+
+                    # Firmware level (VCP 0xC9) — read-only diagnostic
+                    try:
+                        fw_raw = monitor.vcp.get_vcp_feature(_VCP_FIRMWARE_LEVEL)
+                        fw_int = fw_raw[0] if isinstance(fw_raw, tuple) else int(fw_raw)
+                        # Decode as major.minor (high byte.low byte)
+                        fw_major = (fw_int >> 8) & 0xFF
+                        fw_minor = fw_int & 0xFF
+                        metrics[f"{prefix}.firmware_version"] = metric_value(
+                            f"{fw_major}.{fw_minor}"
+                        )
+                    except Exception:
+                        pass
+
             except Exception:
                 logger.debug("Failed to read DDC/CI from monitor %d", i, exc_info=True)
 
@@ -558,6 +631,57 @@ class DDCCICollector(Collector):
         if command == "display.set_power_state":
             state = str(parameters["state"])
             await asyncio.to_thread(self._set_power_state_sync, get_monitors, display_index, state)
+            return {"status": "completed"}
+
+        # Color preset (VCP 0x14) — accepts name or raw int
+        if command == "display.set_color_preset":
+            preset = str(parameters["preset"]).lower()
+            if preset in _COLOR_PRESET_TO_VCP:
+                value = _COLOR_PRESET_TO_VCP[preset]
+            else:
+                try:
+                    value = int(preset)
+                except ValueError:
+                    raise ValueError(
+                        f"Unknown color preset: {preset!r}. "
+                        f"Expected one of: {list(_COLOR_PRESET_TO_VCP)}"
+                    ) from None
+            await asyncio.to_thread(
+                self._set_vcp_sync, get_monitors, display_index, _VCP_COLOR_PRESET, value
+            )
+            return {"status": "completed"}
+
+        # Sharpness (VCP 0x87) — 0-100
+        if command == "display.set_sharpness":
+            value = int(parameters["value"])
+            if not 0 <= value <= 100:
+                raise ValueError(f"Sharpness must be 0-100, got {value}")
+            await asyncio.to_thread(
+                self._set_vcp_sync, get_monitors, display_index, _VCP_SHARPNESS, value
+            )
+            return {"status": "completed"}
+
+        # Audio mute (VCP 0x8D) — MCCS: 1=unmuted, 2=muted
+        if command == "display.set_audio_mute":
+            mute = parameters.get("value", parameters.get("mute", False))
+            vcp_val = 2 if mute else 1
+            await asyncio.to_thread(
+                self._set_vcp_sync, get_monitors, display_index, _VCP_AUDIO_MUTE, vcp_val
+            )
+            return {"status": "completed"}
+
+        # Factory reset (VCP 0x04) — write-only, no parameters
+        if command == "display.factory_reset":
+            await asyncio.to_thread(
+                self._set_vcp_sync, get_monitors, display_index, _VCP_FACTORY_RESET, 1
+            )
+            return {"status": "completed"}
+
+        # Factory color reset (VCP 0x08) — write-only, no parameters
+        if command == "display.factory_color_reset":
+            await asyncio.to_thread(
+                self._set_vcp_sync, get_monitors, display_index, _VCP_FACTORY_COLOR_RESET, 1
+            )
             return {"status": "completed"}
 
         # VCP-based toggle commands (Dell proprietary codes)
