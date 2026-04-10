@@ -124,7 +124,7 @@ class HeadsetControlCollector(Collector):
                 status = battery.get("status", "")
                 level = battery.get("level", -1)
 
-                if isinstance(level, (int, float)) and 0 <= level <= 100:
+                if isinstance(level, int | float) and 0 <= level <= 100:
                     metrics[f"{prefix}.battery_level"] = metric_value(float(level), unit="%")
 
                 if status:
@@ -134,7 +134,7 @@ class HeadsetControlCollector(Collector):
             caps = dev.get("capabilities", {})
 
             sidetone = caps.get("sidetone")
-            if sidetone is not None and isinstance(sidetone, (int, float)):
+            if sidetone is not None and isinstance(sidetone, int | float):
                 metrics[f"{prefix}.sidetone"] = metric_value(int(sidetone), unit="level")
 
             led = caps.get("lights")
@@ -142,7 +142,7 @@ class HeadsetControlCollector(Collector):
                 metrics[f"{prefix}.led"] = metric_value(bool(led))
 
             chatmix = caps.get("chatmix")
-            if chatmix is not None and isinstance(chatmix, (int, float)):
+            if chatmix is not None and isinstance(chatmix, int | float):
                 metrics[f"{prefix}.chatmix"] = metric_value(int(chatmix))
 
             # Firmware if available
@@ -151,6 +151,49 @@ class HeadsetControlCollector(Collector):
                 metrics[f"{prefix}.firmware"] = metric_value(str(firmware))
 
         return metrics
+
+    async def execute_command(
+        self, command: str, target: str, parameters: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Execute headset control commands via CLI."""
+        if self._exe is None:
+            raise RuntimeError("headsetcontrol not available")
+
+        if command == "headset.set_sidetone":
+            value = int(parameters["value"])
+            if not 0 <= value <= 128:
+                raise ValueError(f"Sidetone must be 0-128, got {value}")
+            await self._run_cli("-s", str(value))
+            return {"status": "completed"}
+
+        if command == "headset.set_led":
+            on = parameters.get("value", parameters.get("enabled", True))
+            await self._run_cli("-l", "1" if on else "0")
+            return {"status": "completed"}
+
+        if command == "headset.set_chatmix":
+            value = int(parameters["value"])
+            if not 0 <= value <= 128:
+                raise ValueError(f"Chatmix must be 0-128, got {value}")
+            await self._run_cli("-m", str(value))
+            return {"status": "completed"}
+
+        raise NotImplementedError(f"Unknown command: {command}")
+
+    async def _run_cli(self, *args: str) -> None:
+        """Run headsetcontrol with arguments."""
+        proc = await asyncio.create_subprocess_exec(
+            self._exe,
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=10)
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"headsetcontrol {' '.join(args)} failed (rc={proc.returncode}): "
+                f"{stderr.decode(errors='replace').strip()}"
+            )
 
     async def teardown(self) -> None:
         self._exe = None
