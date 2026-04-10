@@ -339,13 +339,22 @@ class HttpTransport(Transport):
             result = await restart_service()
             return web.json_response(result)
 
-        if command in ("system.lock", "system.sleep", "system.shutdown", "system.hibernate"):
+        if command in (
+            "system.lock",
+            "system.sleep",
+            "system.shutdown",
+            "system.restart",
+            "system.hibernate",
+        ):
             from desk2ha_agent.lifecycle import system_actions
 
             action_map = {
                 "system.lock": system_actions.lock_screen,
                 "system.sleep": system_actions.sleep_system,
                 "system.shutdown": lambda: system_actions.shutdown_system(
+                    parameters.get("delay", 0)
+                ),
+                "system.restart": lambda: system_actions.restart_system(
                     parameters.get("delay", 0)
                 ),
                 "system.hibernate": system_actions.hibernate_system,
