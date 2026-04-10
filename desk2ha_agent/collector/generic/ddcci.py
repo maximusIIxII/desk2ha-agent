@@ -635,9 +635,11 @@ class DDCCICollector(Collector):
 
         # Color preset (VCP 0x14) — accepts name or raw int
         if command == "display.set_color_preset":
-            preset = str(parameters["preset"]).lower()
-            if preset in _COLOR_PRESET_TO_VCP:
-                value = _COLOR_PRESET_TO_VCP[preset]
+            preset = str(parameters["preset"])
+            # Case-insensitive lookup
+            preset_lower_map = {k.lower(): v for k, v in _COLOR_PRESET_TO_VCP.items()}
+            if preset.lower() in preset_lower_map:
+                value = preset_lower_map[preset.lower()]
             else:
                 try:
                     value = int(preset)
