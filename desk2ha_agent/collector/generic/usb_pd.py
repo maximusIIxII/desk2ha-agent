@@ -114,7 +114,7 @@ class USBPDCollector(Collector):
         return metrics
 
     def _collect_wmi_power(self, metrics: dict[str, Any]) -> None:
-        """Read charging rate from WMI BatteryStatus."""
+        """Read charging rate and live voltage from WMI."""
         import pythoncom  # type: ignore[import-untyped]
         import wmi  # type: ignore[import-untyped]
 
@@ -141,8 +141,48 @@ class USBPDCollector(Collector):
                 metrics["power.design_voltage"] = metric_value(
                     round(int(voltage) / 1000, 2), unit="V"
                 )
+
+            # Live battery data from root\WMI BatteryStatus
+            self._collect_wmi_battery_status(metrics)
         finally:
             pythoncom.CoUninitialize()
+
+    def _collect_wmi_battery_status(self, metrics: dict[str, Any]) -> None:
+        """Read live voltage and charge/discharge rate from WMI BatteryStatus."""
+        import wmi  # type: ignore[import-untyped]
+
+        try:
+            conn = wmi.WMI(namespace=r"root\WMI")
+            statuses = conn.BatteryStatus()
+            if not statuses:
+                return
+
+            bat = statuses[0]
+
+            # Live voltage in millivolts
+            voltage = getattr(bat, "Voltage", None)
+            if voltage is not None and int(voltage) > 0:
+                metrics["power.voltage"] = metric_value(round(int(voltage) / 1000, 2), unit="V")
+
+            # Charge rate in milliwatts (>0 when charging)
+            charge_rate = getattr(bat, "ChargeRate", None)
+            if charge_rate is not None and int(charge_rate) > 0:
+                metrics["power.charge_rate"] = metric_value(
+                    round(int(charge_rate) / 1000, 1), unit="W"
+                )
+
+            # Discharge rate in milliwatts (>0 when on battery)
+            discharge_rate = getattr(bat, "DischargeRate", None)
+            if (
+                discharge_rate is not None
+                and int(discharge_rate) > 0
+                and int(discharge_rate) < 2_000_000_000  # filter overflow sentinel
+            ):
+                metrics["power.discharge_rate"] = metric_value(
+                    round(int(discharge_rate) / 1000, 1), unit="W"
+                )
+        except Exception:
+            logger.debug("WMI BatteryStatus query failed", exc_info=True)
 
     def _collect_linux(self) -> dict[str, Any]:
         """Collect USB PD metrics from sysfs."""
