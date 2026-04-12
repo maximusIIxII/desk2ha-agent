@@ -19,7 +19,10 @@ class HelperClient:
     """Queries the elevated helper for privileged metrics."""
 
     def __init__(
-        self, port: int = DEFAULT_PORT, host: str = "127.0.0.1", secret: str | None = None,
+        self,
+        port: int = DEFAULT_PORT,
+        host: str = "127.0.0.1",
+        secret: str | None = None,
     ) -> None:
         self._base_url = f"http://{host}:{port}"
         self._secret = secret
