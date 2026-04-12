@@ -77,11 +77,24 @@ class UVCCollector(Collector):
 
     # Device names that indicate a scanner/printer, not a real webcam
     _SCANNER_PATTERNS = [
-        "officejet", "laserjet", "deskjet", "envy",  # HP printers
-        "printer", "scanner", "mfp", "copier",
-        "epson", "canon lbp", "canon mf", "brother",
-        "xerox", "ricoh", "kyocera", "lexmark",
-        "twain", "wia",
+        "officejet",
+        "laserjet",
+        "deskjet",
+        "envy",  # HP printers
+        "printer",
+        "scanner",
+        "mfp",
+        "copier",
+        "epson",
+        "canon lbp",
+        "canon mf",
+        "brother",
+        "xerox",
+        "ricoh",
+        "kyocera",
+        "lexmark",
+        "twain",
+        "wia",
     ]
 
     async def setup(self) -> None:
@@ -97,7 +110,8 @@ class UVCCollector(Collector):
                     if any(p in model_lower for p in self._SCANNER_PATTERNS):
                         logger.info(
                             "UVC: skipping scanner/printer at index %d: %s",
-                            idx, cam_name[0],
+                            idx,
+                            cam_name[0],
                         )
                         continue
                 filtered.append(idx)
