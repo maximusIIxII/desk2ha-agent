@@ -14,8 +14,8 @@ Collects hardware metrics, peripheral status, and display settings from Windows,
 
 - **Cross-platform**: Windows, Linux, macOS
 - **3-tier collector model**: Platform (OS) → Generic (DDC/CI, HID, BLE, Bluetooth, UVC) → Vendor (Dell, HP, Lenovo, Logitech, Corsair, SteelSeries, Razer)
-- **Display control**: Brightness, contrast, volume, input source, KVM switch, PBP mode via DDC/CI
-- **Webcam control**: Brightness, contrast, saturation, white balance, focus, zoom, pan/tilt via UVC
+- **Display control**: Brightness, contrast, volume, input source, color preset, sharpness, RGB gain (R/G/B), black level (R/G/B), audio mute, KVM switch, PBP mode, auto brightness, auto color temp, smart HDR, power nap, factory reset via DDC/CI
+- **Webcam control**: Brightness, contrast, saturation, sharpness, gain, gamma, white balance, focus, exposure, zoom, pan, tilt, backlight compensation, autofocus, auto WB, auto exposure via UVC
 - **Litra control**: Power, brightness, color temperature for Logitech Litra Glow/Beam
 - **Wireless receivers**: Dell Universal, Logitech Bolt/Unifying/Lightspeed, Jabra Link, Corsair Slipstream, Razer HyperSpeed
 - **Dual transport**: HTTP API (OpenAPI v2.0.0) + MQTT with HA Discovery
@@ -32,10 +32,10 @@ Collects hardware metrics, peripheral status, and display settings from Windows,
 | Platform | Windows (WMI + psutil) | CPU, RAM, disk, battery, network, GPU, OS info |
 | Platform | Linux (sysfs + psutil) | Same as above |
 | Platform | macOS (IOKit + psutil) | Same as above |
-| Generic | DDC/CI | Monitor brightness, contrast, volume, input, power, KVM, PBP |
-| Generic | UVC Webcam | Brightness, contrast, saturation, white balance, focus, zoom, pan/tilt, resolution |
+| Generic | DDC/CI | Monitor brightness, contrast, volume, input, power, color preset, sharpness, RGB gain, black level, audio mute, KVM, PBP, auto brightness, smart HDR, power nap, usage hours, firmware version, factory reset |
+| Generic | UVC Webcam | Brightness, contrast, saturation, sharpness, gain, gamma, white balance, focus, exposure, zoom, pan, tilt, backlight compensation, autofocus, auto WB, auto exposure, resolution, FPS |
 | Generic | USB PD | Charger connected, voltage, charging state |
-| Generic | HeadsetControl | Headset battery, sidetone, LED, chatmix |
+| Generic | HeadsetControl | Headset battery, sidetone level, LED toggle, chat mix, set sidetone/LED/chatmix commands |
 | Generic | HID Battery | USB peripheral battery levels |
 | Generic | Bluetooth Peripheral | Paired BLE + Classic devices, GATT battery levels, device type classification |
 | Generic | Network | WiFi RSSI/signal/SSID, Ethernet speed |
