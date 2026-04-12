@@ -95,7 +95,10 @@ class UVCCollector(Collector):
                 if cam_name:
                     model_lower = cam_name[0].lower()
                     if any(p in model_lower for p in self._SCANNER_PATTERNS):
-                        logger.info("UVC: skipping scanner/printer at index %d: %s", idx, cam_name[0])
+                        logger.info(
+                            "UVC: skipping scanner/printer at index %d: %s",
+                            idx, cam_name[0],
+                        )
                         continue
                 filtered.append(idx)
             self._camera_indices = filtered
@@ -168,7 +171,12 @@ class UVCCollector(Collector):
                                 mfg = vid_mfg
 
                         # Filter out Windows driver manufacturers
-                        if mfg.lower() in ("microsoft", "(standard system devices)", "(standardsystemgeräte)"):
+                        _DRIVER_MFGS = {
+                            "microsoft",
+                            "(standard system devices)",
+                            "(standardsystemgeräte)",
+                        }
+                        if mfg.lower() in _DRIVER_MFGS:
                             mfg = ""
                         if name:
                             names[idx] = (name, mfg)
@@ -248,7 +256,7 @@ class UVCCollector(Collector):
                         model_lower = model.lower()
                         if "ir" in model_lower and "webcam" in model_lower:
                             model = "Webcam (IR / Windows Hello)"
-                        elif "integrated webcam" == model_lower:
+                        elif model_lower == "integrated webcam":
                             model = "Webcam (RGB)"
                         metrics[f"{prefix}.model"] = metric_value(model)
                     if mfg:
