@@ -1,5 +1,8 @@
 # Desk2HA Agent — Full Configuration
 # All options with their default values documented.
+#
+# Generate a secure token:
+#   python -c "import secrets; print(secrets.token_urlsafe(32))"
 
 [agent]
 # Device name override ("auto" uses hostname)

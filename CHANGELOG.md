@@ -3,6 +3,25 @@
 All notable changes to the Desk2HA Agent will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji categories.
 
+## [1.0.0] - 2026-04-12
+
+### ✨ New features
+- **Per-device-type SVG icons**: Image endpoint (`/v1/image/{device_key}`) returns distinct icons for webcam, keyboard, mouse, headset, dock, speaker, light, monitor — resolved via peripheral_db VID:PID lookup
+- **Webcam name resolution**: UVC cameras resolved from OS APIs — Windows (WMI PNPClass=Camera), Linux (/sys/class/video4linux), macOS (system_profiler)
+- **BT manufacturer enrichment**: 37 name-based patterns infer manufacturer (Dell, Jabra, Logitech, Bose, Sony, etc.)
+- **Scanner/printer filter**: UVC collector skips devices matching printer/scanner patterns (OfficeJet, LaserJet, etc.)
+
+### 🐛 Bug fixes
+- **Disconnected BT devices skipped**: Paired-but-not-connected BT Classic devices no longer reported in metrics
+- **USB error devices filtered**: Names containing "Unbekanntes USB-Geraet", "device descriptor request failed", etc. are now excluded
+- **Windows driver manufacturer filtered**: "Microsoft" (WIA driver) no longer set as webcam manufacturer
+
+### 🔒 Security
+- `config.toml` added to `.gitignore` (no longer tracked)
+- Install scripts use `$env:` variables and `$PSScriptRoot` instead of hardcoded paths/passwords
+- Pre-push git hook runs security scanner
+- Test fixtures anonymized (synthetic MAC addresses, generic device names)
+
 ## [0.9.0] - 2026-04-12
 
 ### ✨ New features
