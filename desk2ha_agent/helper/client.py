@@ -18,13 +18,14 @@ _TIMEOUT = aiohttp.ClientTimeout(total=5)
 class HelperClient:
     """Queries the elevated helper for privileged metrics."""
 
-    def __init__(self, port: int = DEFAULT_PORT, host: str = "127.0.0.1") -> None:
+    def __init__(self, port: int = DEFAULT_PORT, host: str = "127.0.0.1", secret: str | None = None) -> None:
         self._base_url = f"http://{host}:{port}"
+        self._secret = secret
         self._available: bool | None = None
 
     def _auth_headers(self) -> dict[str, str]:
-        """Build auth headers from the shared secret env var."""
-        secret = os.environ.get(HELPER_SECRET_ENV, "")
+        """Build auth headers from config secret or env var fallback."""
+        secret = self._secret or os.environ.get(HELPER_SECRET_ENV, "")
         if secret:
             return {"Authorization": f"Bearer {secret}"}
         return {}

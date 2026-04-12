@@ -60,6 +60,21 @@ class BleBatteryConfig(BaseModel):
     filter_known_only: bool = True
 
 
+class HelperConfig(BaseModel):
+    """Elevated helper configuration."""
+
+    secret: str | None = None
+    secret_env: str = "DESK2HA_HELPER_SECRET"
+    port: int = 9694
+    host: str = "127.0.0.1"
+
+    @model_validator(mode="after")
+    def _resolve_secret(self) -> HelperConfig:
+        if self.secret is None:
+            self.secret = os.environ.get(self.secret_env)
+        return self
+
+
 class CollectorsConfig(BaseModel):
     """Collector configuration."""
 
@@ -95,6 +110,7 @@ class AgentConfig(BaseModel):
     agent: AgentSection = AgentSection()
     http: HttpConfig = HttpConfig(enabled=False)
     mqtt: MqttConfig = MqttConfig()
+    helper: HelperConfig = HelperConfig()
     collectors: CollectorsConfig = CollectorsConfig()
     logging: LoggingConfig = LoggingConfig()
     provisioning: ProvisioningConfig = ProvisioningConfig()

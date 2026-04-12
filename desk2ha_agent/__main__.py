@@ -7,6 +7,7 @@ import asyncio
 import contextlib
 import logging
 import logging.handlers
+import os
 import signal
 import sys
 import time
@@ -85,6 +86,10 @@ def _setup_logging(config_path: Path, level: str) -> None:
 async def _run(config_path: Path, *, service_mode: bool = False) -> None:
     config = load_config(config_path)
     _setup_logging(config_path, config.logging.level)
+
+    # Propagate helper secret to env so HelperClient picks it up
+    if config.helper.secret:
+        os.environ["DESK2HA_HELPER_SECRET"] = config.helper.secret
 
     logger.info("Desk2HA Agent %s starting", __version__)
     logger.info("Config loaded from %s", config_path)
