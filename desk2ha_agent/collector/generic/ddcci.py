@@ -123,7 +123,13 @@ def _get_input_source_options() -> list[str]:
 _VCP_FACTORY_RESET = 0x04
 _VCP_FACTORY_COLOR_RESET = 0x08
 _VCP_COLOR_PRESET = 0x14
+_VCP_RED_GAIN = 0x16
+_VCP_GREEN_GAIN = 0x18
+_VCP_BLUE_GAIN = 0x1A
 _VCP_VOLUME = 0x62
+_VCP_RED_BLACK_LEVEL = 0x6C
+_VCP_GREEN_BLACK_LEVEL = 0x6E
+_VCP_BLUE_BLACK_LEVEL = 0x70
 _VCP_SHARPNESS = 0x87
 _VCP_AUDIO_MUTE = 0x8D
 _VCP_USAGE_HOURS = 0xC0
@@ -540,7 +546,33 @@ class DDCCICollector(Collector):
                     except Exception:
                         pass
 
-                    # ── Standard MCCS codes (new) ──
+                    # ── Standard MCCS codes (extended) ──
+
+                    # RGB Gain (VCP 0x16, 0x18, 0x1A) — 0-100
+                    for vcp, suffix in (
+                        (_VCP_RED_GAIN, "red_gain"),
+                        (_VCP_GREEN_GAIN, "green_gain"),
+                        (_VCP_BLUE_GAIN, "blue_gain"),
+                    ):
+                        try:
+                            raw = monitor.vcp.get_vcp_feature(vcp)
+                            val = raw[0] if isinstance(raw, tuple) else int(raw)
+                            metrics[f"{prefix}.{suffix}"] = metric_value(float(val), unit="%")
+                        except Exception:
+                            pass
+
+                    # RGB Black Level (VCP 0x6C, 0x6E, 0x70) — 0-100
+                    for vcp, suffix in (
+                        (_VCP_RED_BLACK_LEVEL, "red_black_level"),
+                        (_VCP_GREEN_BLACK_LEVEL, "green_black_level"),
+                        (_VCP_BLUE_BLACK_LEVEL, "blue_black_level"),
+                    ):
+                        try:
+                            raw = monitor.vcp.get_vcp_feature(vcp)
+                            val = raw[0] if isinstance(raw, tuple) else int(raw)
+                            metrics[f"{prefix}.{suffix}"] = metric_value(float(val), unit="%")
+                        except Exception:
+                            pass
 
                     # Color preset (VCP 0x14)
                     try:
@@ -660,6 +692,24 @@ class DDCCICollector(Collector):
                 raise ValueError(f"Sharpness must be 0-100, got {value}")
             await asyncio.to_thread(
                 self._set_vcp_sync, get_monitors, display_index, _VCP_SHARPNESS, value
+            )
+            return {"status": "completed"}
+
+        # RGB Gain + Black Level (VCP 0x16/18/1A, 0x6C/6E/70) — 0-100
+        _rgb_vcp_map = {
+            "display.set_red_gain": _VCP_RED_GAIN,
+            "display.set_green_gain": _VCP_GREEN_GAIN,
+            "display.set_blue_gain": _VCP_BLUE_GAIN,
+            "display.set_red_black_level": _VCP_RED_BLACK_LEVEL,
+            "display.set_green_black_level": _VCP_GREEN_BLACK_LEVEL,
+            "display.set_blue_black_level": _VCP_BLUE_BLACK_LEVEL,
+        }
+        if command in _rgb_vcp_map:
+            value = int(parameters["value"])
+            if not 0 <= value <= 100:
+                raise ValueError(f"{command} value must be 0-100, got {value}")
+            await asyncio.to_thread(
+                self._set_vcp_sync, get_monitors, display_index, _rgb_vcp_map[command], value
             )
             return {"status": "completed"}
 

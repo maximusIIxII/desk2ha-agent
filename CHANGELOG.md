@@ -3,6 +3,19 @@
 All notable changes to the Desk2HA Agent will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji categories.
 
+## [0.9.0] - 2026-04-12
+
+### ✨ New features
+- **Extended DDC/CI reads**: Color Preset (0x14), Sharpness (0x87), Audio Mute (0x8D), Usage Hours (0xC0), Firmware Level (0xC9)
+- **Extended DDC/CI commands**: `set_color_preset`, `set_sharpness`, `set_audio_mute`, `factory_reset`, `factory_color_reset`
+- **RGB Gain controls**: Red (0x16), Green (0x18), Blue (0x1A) gain read + set commands
+- **Black Level controls**: Red (0x6C), Green (0x6E), Blue (0x70) black level read + set commands
+- **HeadsetControl commands**: `set_sidetone` (-s), `set_led` (-l), `set_chatmix` (-m)
+- **Webcam optional dependency**: `pip install desk2ha-agent[webcam]` for UVC camera control
+
+### 🐛 Bug fixes
+- **Case-insensitive color preset lookup**: sRGB/7500K mixed-case values now resolve correctly
+
 ## [0.8.3] - 2026-04-09
 
 ### 🐛 Bug fixes
