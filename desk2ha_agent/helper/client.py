@@ -18,7 +18,9 @@ _TIMEOUT = aiohttp.ClientTimeout(total=5)
 class HelperClient:
     """Queries the elevated helper for privileged metrics."""
 
-    def __init__(self, port: int = DEFAULT_PORT, host: str = "127.0.0.1", secret: str | None = None) -> None:
+    def __init__(
+        self, port: int = DEFAULT_PORT, host: str = "127.0.0.1", secret: str | None = None,
+    ) -> None:
         self._base_url = f"http://{host}:{port}"
         self._secret = secret
         self._available: bool | None = None
