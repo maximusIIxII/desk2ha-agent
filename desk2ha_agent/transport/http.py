@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import platform
 import time
 from collections.abc import Awaitable, Callable
@@ -92,6 +93,9 @@ class HttpTransport(Transport):
 
     async def start(self) -> None:
         """Start the HTTP server."""
+        # Kill any existing agent on this port before starting
+        await self._kill_existing(self._config.port)
+
         self._runner = web.AppRunner(self._app)
         await self._runner.setup()
         site = web.TCPSite(self._runner, self._config.bind, self._config.port)
@@ -101,6 +105,37 @@ class HttpTransport(Transport):
             self._config.bind,
             self._config.port,
         )
+
+    @staticmethod
+    async def _kill_existing(port: int) -> None:
+        """Kill any process already listening on the given port."""
+        import asyncio
+        import sys
+
+        if sys.platform == "win32":
+            cmd = f'netstat -ano | findstr ":{port} " | findstr "LISTEN"'
+        else:
+            cmd = f"lsof -ti tcp:{port}"
+        try:
+            proc = await asyncio.create_subprocess_shell(
+                cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await proc.communicate()
+            if not stdout.strip():
+                return
+            for line in stdout.decode().strip().splitlines():
+                pid = line.strip().split()[-1] if sys.platform == "win32" else line.strip()
+                if pid.isdigit() and int(pid) != os.getpid():
+                    logger.warning("Killing existing agent on port %d (PID %s)", port, pid)
+                    if sys.platform == "win32":
+                        await asyncio.create_subprocess_shell(f"taskkill /PID {pid} /F")
+                    else:
+                        os.kill(int(pid), 15)
+                    await asyncio.sleep(1)
+        except Exception:
+            logger.debug("Could not check for existing agent", exc_info=True)
 
     async def stop(self) -> None:
         """Stop the HTTP server."""
