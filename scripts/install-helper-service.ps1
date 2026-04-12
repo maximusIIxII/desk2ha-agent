@@ -7,9 +7,10 @@
 
 $ErrorActionPreference = "Stop"
 
-$python = "C:\Users\Example Workstation\AppData\Local\Python\pythoncore-3.14-64\python.exe"
-$appDir = "C:\dev\desk2ha\desk2ha-agent"
-$logDir = "C:\dev\desk2ha\desk2ha-agent\logs"
+# Adjust these paths to your environment
+$python = "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe"
+$appDir = "$PSScriptRoot\.."
+$logDir = "$PSScriptRoot\..\logs"
 
 # Ensure log directory exists
 if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir | Out-Null }

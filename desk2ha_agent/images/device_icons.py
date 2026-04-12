@@ -67,6 +67,30 @@ _ICONS: dict[str, str] = {
         '<circle cx="18" cy="12" r="1.5" fill="#03A9F4"/>'
         "</svg>"
     ),
+    "webcam": (
+        '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
+        '<circle cx="12" cy="10" r="7" fill="none" stroke="#64748B" stroke-width="1.2"/>'
+        '<circle cx="12" cy="10" r="3.5" fill="#E2E8F0"/>'
+        '<circle cx="12" cy="10" r="1.5" fill="#03A9F4"/>'
+        '<rect x="10" y="17" width="4" height="3" fill="#94A3B8"/>'
+        '<rect x="8" y="20" width="8" height="1.5" rx="0.5" fill="#94A3B8"/>'
+        "</svg>"
+    ),
+    "speaker": (
+        '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
+        '<circle cx="12" cy="12" r="9" fill="none" stroke="#64748B" stroke-width="1.2"/>'
+        '<circle cx="12" cy="12" r="4" fill="#E2E8F0"/>'
+        '<circle cx="12" cy="12" r="1.5" fill="#03A9F4"/>'
+        "</svg>"
+    ),
+    "light": (
+        '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
+        '<circle cx="12" cy="9" r="5" fill="none" stroke="#FFC107" stroke-width="1.2"/>'
+        '<circle cx="12" cy="9" r="2.5" fill="#FFF9C4"/>'
+        '<line x1="12" y1="14" x2="12" y2="18" stroke="#94A3B8" stroke-width="1.5"/>'
+        '<rect x="9" y="18" width="6" height="2" rx="1" fill="#94A3B8"/>'
+        "</svg>"
+    ),
     "workstation": (
         '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
         '<rect x="6" y="2" width="12" height="18" rx="1.5" fill="none" stroke="#64748B" stroke-width="1.2"/>'

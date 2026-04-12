@@ -60,25 +60,25 @@ class TestClassifyDevice:
 
 class TestMakeDeviceKey:
     def test_colon_format(self):
-        assert _make_device_key("CF:B5:EB:B8:5D:D0") == "bt_CFB5EBB85DD0"
+        assert _make_device_key("AA:BB:CC:DD:EE:F0") == "bt_AABBCCDDEEF0"
 
     def test_hyphen_format(self):
-        assert _make_device_key("CF-B5-EB-B8-5D-D0") == "bt_CFB5EBB85DD0"
+        assert _make_device_key("AA-BB-CC-DD-EE-F0") == "bt_AABBCCDDEEF0"
 
     def test_lowercase(self):
-        assert _make_device_key("cf:b5:eb:b8:5d:d0") == "bt_CFB5EBB85DD0"
+        assert _make_device_key("aa:bb:cc:dd:ee:f0") == "bt_AABBCCDDEEF0"
 
 
 class TestExtractAddress:
     def test_ble_address(self):
-        dev_id = "BluetoothLE#BluetoothLE2c:0d:a7:d5:d7:ba-cf:b5:eb:b8:5d:d0"
+        dev_id = "BluetoothLE#BluetoothLE11:22:33:44:55:66-aa:bb:cc:dd:ee:f0"
         addr = BluetoothPeripheralCollector._extract_address(dev_id)
-        assert addr == "CF:B5:EB:B8:5D:D0"
+        assert addr == "AA:BB:CC:DD:EE:F0"
 
     def test_classic_address(self):
-        dev_id = "Bluetooth#Bluetooth2c:0d:a7:d5:d7:ba-38:5c:76:15:00:ea"
+        dev_id = "Bluetooth#Bluetooth11:22:33:44:55:66-aa:bb:cc:dd:ee:f1"
         addr = BluetoothPeripheralCollector._extract_address(dev_id)
-        assert addr == "38:5C:76:15:00:EA"
+        assert addr == "AA:BB:CC:DD:EE:F1"
 
     def test_short_id_returns_none(self):
         assert BluetoothPeripheralCollector._extract_address("short") is None

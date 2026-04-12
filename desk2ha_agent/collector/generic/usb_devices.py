@@ -30,6 +30,11 @@ _SKIP_NAMES = {
     "root",
     "billboard",
     "ucm-ucsi",
+    "unbekanntes usb",
+    "unknown usb",
+    "fehler beim anfordern",
+    "device descriptor request failed",
+    "port reset failed",
 }
 
 _SKIP_VIDS = {

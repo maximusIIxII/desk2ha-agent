@@ -274,9 +274,31 @@ class HttpTransport(Transport):
     async def _handle_image(self, request: web.Request) -> web.Response:
         """GET /v1/image/{device_key} -- serve device icon SVG.
 
-        Uses Tier 2 vendor-specific icons when manufacturer/model is known,
-        falls back to Tier 1 generic device type icons.
+        For host device: uses Tier 2 vendor-specific icons.
+        For peripherals: maps device_key to device type icon.
         """
+        device_key = request.match_info.get("device_key", "host")
+
+        # Peripheral image: determine device type from key or current metrics
+        if device_key != "host" and device_key.startswith("peripheral."):
+            svg = self._get_peripheral_icon(device_key)
+            return web.Response(
+                text=svg,
+                content_type="image/svg+xml",
+                headers={"Cache-Control": "public, max-age=3600"},
+            )
+
+        # Display image (display.0 or display_0)
+        if device_key.startswith("display.") or device_key.startswith("display_"):
+            from desk2ha_agent.images.device_icons import get_device_icon_svg
+
+            return web.Response(
+                text=get_device_icon_svg("monitor"),
+                content_type="image/svg+xml",
+                headers={"Cache-Control": "public, max-age=3600"},
+            )
+
+        # Host device: Tier 2 vendor icon
         from desk2ha_agent.images.vendor_icons import get_device_image
 
         hw_info: dict[str, Any] = {"device_type": "notebook"}
@@ -291,6 +313,61 @@ class HttpTransport(Transport):
             content_type="image/svg+xml",
             headers={"Cache-Control": "public, max-age=3600"},
         )
+
+    def _get_peripheral_icon(self, device_key: str) -> str:
+        """Map a peripheral device_key to the appropriate device type SVG."""
+        from desk2ha_agent.images.device_icons import get_device_icon_svg
+
+        key_lower = device_key.lower()
+
+        # Match device type from device_key patterns AND peripheral_db
+        if "webcam" in key_lower or "camera" in key_lower:
+            return get_device_icon_svg("webcam")
+        if "keyboard" in key_lower or "kb" in key_lower:
+            return get_device_icon_svg("keyboard")
+        if "mouse" in key_lower:
+            return get_device_icon_svg("mouse")
+        if "headset" in key_lower or "earbud" in key_lower:
+            return get_device_icon_svg("headset")
+        if "dock" in key_lower or "hub" in key_lower:
+            return get_device_icon_svg("dock")
+        if "litra" in key_lower or "light" in key_lower:
+            return get_device_icon_svg("light")
+        if "speak" in key_lower:
+            return get_device_icon_svg("speaker")
+
+        # USB peripherals: look up VID:PID in peripheral_db for device type
+        if "usb_" in key_lower:
+            import re
+
+            vid_pid_match = re.search(r"usb_([0-9a-f]{4})_([0-9a-f]{4})", key_lower)
+            if vid_pid_match:
+                from desk2ha_agent.peripheral_db import lookup_peripheral
+
+                vid, pid = vid_pid_match.group(1), vid_pid_match.group(2)
+                spec = lookup_peripheral(f"{vid}:{pid}")
+                if spec:
+                    type_map = {
+                        "keyboard": "keyboard",
+                        "mouse": "mouse",
+                        "headset": "headset",
+                        "earbuds": "headset",
+                        "dock": "dock",
+                        "webcam": "webcam",
+                        "light": "light",
+                        "speakerphone": "speaker",
+                        "speaker": "speaker",
+                    }
+                    mapped = type_map.get(spec.device_type, "")
+                    if mapped:
+                        return get_device_icon_svg(mapped)
+
+        # BT peripherals: look up model name from key suffix
+        if "bt_" in key_lower:
+            # Can't determine type from MAC address alone — use generic BT icon
+            return get_device_icon_svg("headset")
+
+        return get_device_icon_svg("notebook")
 
     async def _handle_commands_list(self, _request: web.Request) -> web.Response:
         """GET /v1/commands -- list available commands."""

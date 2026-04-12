@@ -54,7 +54,7 @@ def mqtt_transport(mqtt_config):
     info.get_device_key.return_value = "TEST-001"
     info.get_hardware.return_value = {
         "manufacturer": "Dell Inc.",
-        "model": "Example Workstation",
+        "model": "Test Workstation 7000",
         "serial_number": "TEST-001",
     }
     return MqttTransport(config=mqtt_config, state=state, info_provider=info)
@@ -70,7 +70,7 @@ def test_device_block(mqtt_transport):
     block = mqtt_transport._build_device_block()
     assert block["identifiers"] == ["desk2ha_TEST-001"]
     assert block["manufacturer"] == "Dell Inc."
-    assert block["model"] == "Example Workstation"
+    assert block["model"] == "Test Workstation 7000"
     assert block["serial_number"] == "TEST-001"
 
 

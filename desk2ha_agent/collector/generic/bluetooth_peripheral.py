@@ -43,11 +43,63 @@ _TYPE_PATTERNS: list[tuple[str, str]] = [
     ("earbud", "earbuds"),
     ("headphone", "headphones"),
     ("speaker", "speaker"),
+    ("speakerphone", "speakerphone"),
+    ("speak", "speakerphone"),
     ("gamepad", "gamepad"),
     ("controller", "gamepad"),
     ("pen", "stylus"),
     ("stylus", "stylus"),
 ]
+
+# Name-pattern → manufacturer mapping for BT devices without GATT manufacturer info
+_MANUFACTURER_PATTERNS: list[tuple[str, str]] = [
+    ("dell", "Dell"),
+    ("km7321w", "Dell"),
+    ("km5221w", "Dell"),
+    ("ms5320w", "Dell"),
+    ("ms3320w", "Dell"),
+    ("ms5120w", "Dell"),
+    ("kb900", "Dell"),
+    ("ms900", "Dell"),
+    ("kb700", "Dell"),
+    ("eb525", "Dell"),
+    ("wl5022", "Dell"),
+    ("wl7024", "Dell"),
+    ("wl3024", "Dell"),
+    ("jabra", "Jabra"),
+    ("speak2", "Jabra"),
+    ("speak 75", "Jabra"),
+    ("evolve2", "Jabra"),
+    ("engage", "Jabra"),
+    ("elite", "Jabra"),
+    ("logitech", "Logitech"),
+    ("mx master", "Logitech"),
+    ("mx keys", "Logitech"),
+    ("mx anywhere", "Logitech"),
+    ("bose", "Bose"),
+    ("sony wh-", "Sony"),
+    ("sony wf-", "Sony"),
+    ("airpods", "Apple"),
+    ("surface", "Microsoft"),
+    ("arctis", "SteelSeries"),
+    ("razer", "Razer"),
+    ("corsair", "Corsair"),
+    ("plantronics", "Plantronics"),
+    ("poly", "Poly"),
+    ("sennheiser", "Sennheiser"),
+    ("jbl", "JBL"),
+    ("samsung", "Samsung"),
+    ("galaxy buds", "Samsung"),
+]
+
+
+def _infer_manufacturer(name: str) -> str:
+    """Infer manufacturer from device name patterns."""
+    lower = name.lower()
+    for pattern, manufacturer in _MANUFACTURER_PATTERNS:
+        if pattern in lower:
+            return manufacturer
+    return ""
 
 
 def _classify_device(name: str) -> str:
@@ -191,6 +243,11 @@ class BluetoothPeripheralCollector(Collector):
                 metrics[f"{prefix}.transport"] = metric_value("ble")
                 metrics[f"{prefix}.connected"] = metric_value(True)
 
+                # Infer manufacturer from name pattern (may be overridden by GATT below)
+                inferred_mfg = _infer_manufacturer(name)
+                if inferred_mfg:
+                    metrics[f"{prefix}.manufacturer"] = metric_value(inferred_mfg)
+
                 # Read battery level
                 result = await ble_device.get_gatt_services_for_uuid_async(
                     _uuid.UUID(BATTERY_SERVICE_UUID)
@@ -290,10 +347,19 @@ class BluetoothPeripheralCollector(Collector):
             except Exception:
                 logger.debug("Could not check connection for %s", name)
 
+            # Skip disconnected (paired-only) devices — they clutter HA
+            if not connected:
+                continue
+
             metrics[f"{prefix}.model"] = metric_value(name)
             metrics[f"{prefix}.type"] = metric_value(_classify_device(name))
             metrics[f"{prefix}.transport"] = metric_value("classic")
             metrics[f"{prefix}.connected"] = metric_value(connected)
+
+            # Infer manufacturer from name pattern
+            inferred_mfg = _infer_manufacturer(name)
+            if inferred_mfg:
+                metrics[f"{prefix}.manufacturer"] = metric_value(inferred_mfg)
 
         return metrics
 
@@ -337,6 +403,11 @@ class BluetoothPeripheralCollector(Collector):
             metrics[f"{prefix}.type"] = metric_value(_classify_device(name))
             metrics[f"{prefix}.transport"] = metric_value("ble")
             metrics[f"{prefix}.connected"] = metric_value(True)
+
+            # Infer manufacturer from name pattern
+            inferred_mfg = _infer_manufacturer(name)
+            if inferred_mfg:
+                metrics[f"{prefix}.manufacturer"] = metric_value(inferred_mfg)
 
             # Check if device advertises Battery Service
             service_uuids = [str(u).lower() for u in (adv_data.service_uuids or [])]

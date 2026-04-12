@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
 from typing import Any, ClassVar
 
 from desk2ha_agent.collector.base import (
@@ -55,6 +56,7 @@ class UVCCollector(Collector):
 
     def __init__(self) -> None:
         self._camera_indices: list[int] = []
+        self._camera_names: dict[int, tuple[str, str]] = {}  # idx → (model, manufacturer)
 
     async def probe(self) -> bool:
         try:
@@ -73,13 +75,151 @@ class UVCCollector(Collector):
                 cap.release()
         return len(self._camera_indices) > 0
 
+    # Device names that indicate a scanner/printer, not a real webcam
+    _SCANNER_PATTERNS = [
+        "officejet", "laserjet", "deskjet", "envy",  # HP printers
+        "printer", "scanner", "mfp", "copier",
+        "epson", "canon lbp", "canon mf", "brother",
+        "xerox", "ricoh", "kyocera", "lexmark",
+        "twain", "wia",
+    ]
+
     async def setup(self) -> None:
         if self._camera_indices:
+            self._camera_names = await asyncio.to_thread(self._resolve_camera_names)
+
+            # Filter out scanners/printers that OpenCV detects as cameras
+            filtered = []
+            for idx in self._camera_indices:
+                cam_name = self._camera_names.get(idx)
+                if cam_name:
+                    model_lower = cam_name[0].lower()
+                    if any(p in model_lower for p in self._SCANNER_PATTERNS):
+                        logger.info("UVC: skipping scanner/printer at index %d: %s", idx, cam_name[0])
+                        continue
+                filtered.append(idx)
+            self._camera_indices = filtered
+
             logger.info(
-                "UVC: found %d camera(s) at indices %s",
+                "UVC: found %d camera(s) at indices %s, names=%s",
                 len(self._camera_indices),
                 self._camera_indices,
+                self._camera_names,
             )
+
+    def _resolve_camera_names(self) -> dict[int, tuple[str, str]]:
+        """Resolve camera index → (model, manufacturer) from OS APIs."""
+        names: dict[int, tuple[str, str]] = {}
+
+        if sys.platform == "win32":
+            names = self._resolve_windows_cameras()
+        elif sys.platform == "linux":
+            names = self._resolve_linux_cameras()
+        elif sys.platform == "darwin":
+            names = self._resolve_macos_cameras()
+
+        return names
+
+    def _resolve_windows_cameras(self) -> dict[int, tuple[str, str]]:
+        """Resolve camera names via WMI Win32_PnPEntity."""
+        names: dict[int, tuple[str, str]] = {}
+        try:
+            import pythoncom
+            import wmi
+
+            pythoncom.CoInitialize()
+            try:
+                conn = wmi.WMI()
+                # Query for video capture devices (camera class GUID)
+                cameras = conn.query(
+                    "SELECT Name, Manufacturer, DeviceID FROM Win32_PnPEntity "
+                    "WHERE PNPClass = 'Camera'"
+                )
+                cam_list = list(cameras)
+                for i, idx in enumerate(self._camera_indices):
+                    if i < len(cam_list):
+                        cam = cam_list[i]
+                        name = getattr(cam, "Name", "") or ""
+                        mfg = getattr(cam, "Manufacturer", "") or ""
+                        did = getattr(cam, "DeviceID", "") or ""
+
+                        # Try peripheral_db lookup via VID:PID
+                        vid, pid = "", ""
+                        for part in did.split("\\"):
+                            if "VID_" in part:
+                                for segment in part.split("&"):
+                                    if segment.startswith("VID_"):
+                                        vid = segment[4:]
+                                    elif segment.startswith("PID_"):
+                                        pid = segment[4:]
+
+                        if vid and pid:
+                            from desk2ha_agent.peripheral_db import (
+                                lookup_manufacturer,
+                                lookup_peripheral,
+                            )
+
+                            spec = lookup_peripheral(f"{vid}:{pid}")
+                            if spec:
+                                names[idx] = (spec.model, spec.manufacturer)
+                                continue
+                            vid_mfg = lookup_manufacturer(vid)
+                            if vid_mfg:
+                                mfg = vid_mfg
+
+                        # Filter out Windows driver manufacturers
+                        if mfg.lower() in ("microsoft", "(standard system devices)", "(standardsystemgeräte)"):
+                            mfg = ""
+                        if name:
+                            names[idx] = (name, mfg)
+            finally:
+                pythoncom.CoUninitialize()
+        except Exception:
+            logger.debug("Could not resolve Windows camera names", exc_info=True)
+        return names
+
+    def _resolve_linux_cameras(self) -> dict[int, tuple[str, str]]:
+        """Resolve camera names via /sys/class/video4linux."""
+        from pathlib import Path
+
+        names: dict[int, tuple[str, str]] = {}
+        for idx in self._camera_indices:
+            name_path = Path(f"/sys/class/video4linux/video{idx}/name")
+            if name_path.exists():
+                try:
+                    name = name_path.read_text().strip()
+                    if name:
+                        names[idx] = (name, "")
+                except Exception:
+                    pass
+        return names
+
+    def _resolve_macos_cameras(self) -> dict[int, tuple[str, str]]:
+        """Resolve camera names via system_profiler."""
+        import json
+        import subprocess
+
+        names: dict[int, tuple[str, str]] = {}
+        try:
+            result = subprocess.run(
+                ["system_profiler", "SPCameraDataType", "-json"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                data = json.loads(result.stdout)
+                cams = data.get("SPCameraDataType", [])
+                for i, idx in enumerate(self._camera_indices):
+                    if i < len(cams):
+                        cam = cams[i]
+                        name = cam.get("_name", "")
+                        mfg = cam.get("spcamera_manufacturer", "")
+                        if name:
+                            names[idx] = (name, mfg)
+        except Exception:
+            logger.debug("Could not resolve macOS camera names", exc_info=True)
+        return names
 
     async def collect(self) -> dict[str, Any]:
         try:
@@ -99,6 +239,21 @@ class UVCCollector(Collector):
 
             prefix = f"webcam.{idx}"
             try:
+                # Device identity (resolved from OS APIs)
+                cam_name = self._camera_names.get(idx)
+                if cam_name:
+                    model, mfg = cam_name
+                    # Disambiguate generic "Integrated Webcam" names
+                    if model:
+                        model_lower = model.lower()
+                        if "ir" in model_lower and "webcam" in model_lower:
+                            model = "Webcam (IR / Windows Hello)"
+                        elif "integrated webcam" == model_lower:
+                            model = "Webcam (RGB)"
+                        metrics[f"{prefix}.model"] = metric_value(model)
+                    if mfg:
+                        metrics[f"{prefix}.manufacturer"] = metric_value(mfg)
+
                 # Resolution
                 w = cap.get(_CAP_PROP_FRAME_WIDTH)
                 h = cap.get(_CAP_PROP_FRAME_HEIGHT)
