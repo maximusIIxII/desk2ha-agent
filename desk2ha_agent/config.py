@@ -14,7 +14,7 @@ class HttpConfig(BaseModel):
     """HTTP transport configuration."""
 
     enabled: bool = True
-    bind: str = "127.0.0.1"
+    bind: str = "0.0.0.0"
     port: int = 9693
     auth_token: str | None = None
     auth_token_env: str = "DESK2HA_HTTP_TOKEN"
