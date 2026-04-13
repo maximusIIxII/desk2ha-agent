@@ -3,6 +3,24 @@
 All notable changes to the Desk2HA Agent will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji categories.
 
+## [1.0.3] - 2026-04-13
+
+### 🐛 Bug fixes
+- **Auto-kill duplicate agent**: Agent detects and terminates existing process on same port at startup
+- **Default HTTP bind to 0.0.0.0**: Fixes connectivity for remote clients (was 127.0.0.1)
+- **Lint fixes**: Line length and yoda condition corrections
+
+### 🔧 Improvements
+- **Persistent helper secret**: Secret stored in config.toml `[helper]` section instead of env var
+- **Pre-commit hook**: ruff lint + format + pytest before every commit
+- **Release script**: `scripts/release.sh` enforces version consistency, lint, tests, security scan
+- **Version-check CI**: Release workflow verifies tag matches pyproject.toml + CHANGELOG
+- **Structured release notes**: GitHub Releases now generated from CHANGELOG sections
+
+### 📖 Documentation
+- Added HID sniffer tool from old repo
+- Added DDPM USB capture script from old repo
+
 ## [1.0.0] - 2026-04-12
 
 ### ✨ New features
