@@ -263,6 +263,8 @@ class HttpTransport(Transport):
                     audio.setdefault(dev_id, {})[metric_name] = value
             elif key.startswith("agent."):
                 agent[key.removeprefix("agent.")] = value
+            elif key.startswith("fleet."):
+                agent[key] = value  # Fleet metrics reported under agent section
             elif key.startswith("network."):
                 system[key] = value  # Network metrics go to system
             elif key.startswith("webcam."):
