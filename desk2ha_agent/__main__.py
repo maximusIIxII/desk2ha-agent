@@ -109,13 +109,6 @@ async def _run(config_path: Path, *, service_mode: bool = False) -> None:
             info_provider = c
             break
 
-    # Propagate host identity to peripheral collectors for connected_host tracking
-    if info_provider is not None:
-        host_key = info_provider.get_device_key()
-        if host_key:
-            for c in collectors:
-                c.host_device_key = host_key
-
     # Wire components
     state = StateCache()
     intervals = {k: float(v) for k, v in config.collectors.intervals.items()}
@@ -124,6 +117,16 @@ async def _run(config_path: Path, *, service_mode: bool = False) -> None:
     # Start collectors
     await scheduler.start()
     await asyncio.sleep(1.0)  # Let collectors gather initial data
+
+    # Propagate host identity to peripheral collectors for connected_host tracking.
+    # Must happen AFTER first collect cycle because platform collectors resolve
+    # their device_key during collect(), not during setup().
+    if info_provider is not None:
+        host_key = info_provider.get_device_key()
+        if host_key:
+            for c in collectors:
+                c.host_device_key = host_key
+            logger.info("Host device key propagated: %s", host_key)
 
     # Fleet policy receiver
     from desk2ha_agent.lifecycle.policy import PolicyReceiver
