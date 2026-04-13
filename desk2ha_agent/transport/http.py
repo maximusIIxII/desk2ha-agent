@@ -7,6 +7,7 @@ import os
 import platform
 import time
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from aiohttp import web
@@ -61,12 +62,14 @@ class HttpTransport(Transport):
         scheduler: Scheduler,
         info_provider: DeviceInfoProvider | None = None,
         policy_receiver: PolicyReceiver | None = None,
+        config_path: Path | None = None,
     ) -> None:
         self._config = config
         self._state = state
         self._scheduler = scheduler
         self._info_provider = info_provider
         self._policy_receiver = policy_receiver
+        self._config_path = config_path
         self._start_time = time.monotonic()
         self._app = self._create_app()
         self._runner: web.AppRunner | None = None
@@ -496,6 +499,17 @@ class HttpTransport(Transport):
 
             version = parameters.get("version")
             result = await self_update(version=version)
+            return web.json_response(result)
+
+        # Bulk config command
+        if command == "config.bulk_set" and self._config_path is not None:
+            import asyncio
+
+            from desk2ha_agent.lifecycle.config_api import bulk_set_config
+
+            result = await asyncio.to_thread(
+                bulk_set_config, self._config_path, parameters.get("changes", [])
+            )
             return web.json_response(result)
 
         # Fleet policy commands

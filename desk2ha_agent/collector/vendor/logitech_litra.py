@@ -129,6 +129,17 @@ class LogitechLitraCollector(Collector):
             metrics[f"{prefix}.model"] = metric_value(product)
             metrics[f"{prefix}.manufacturer"] = metric_value("Logitech")
 
+            # Multi-host tracking: global_id + connected_host
+            vid = dev_info.get("vendor_id", 0)
+            pid = dev_info.get("product_id", 0)
+            serial = dev_info.get("serial_number", "")
+            if serial and vid and pid:
+                metrics[f"{prefix}.global_id"] = metric_value(f"usb:{vid:04X}:{pid:04X}:{serial}")
+            else:
+                metrics[f"{prefix}.global_id"] = metric_value(None)
+            if self.host_device_key:
+                metrics[f"{prefix}.connected_host"] = metric_value(self.host_device_key)
+
             # Use cached power state — never send Power-GET (wakes the device).
             cached_power = self._power_cache.get(i)
             metrics[f"{prefix}.power"] = metric_value(

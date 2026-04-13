@@ -81,6 +81,97 @@ def set_config_value(config_path: Path, section: str, key: str, value: Any) -> d
     }
 
 
+def bulk_set_config(
+    config_path: Path,
+    changes: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Apply multiple config changes atomically (single read/write cycle).
+
+    Each change is a dict with ``section``, ``key``, and ``value``.
+    Returns summary with per-change results.
+    """
+    if not changes:
+        return {"status": "applied", "applied": 0, "restart_required": False, "results": []}
+
+    # Fail-fast: reject entire batch if any key is forbidden
+    for change in changes:
+        key = change.get("key", "")
+        if key in _FORBIDDEN_KEYS:
+            return {
+                "status": "forbidden",
+                "message": f"Key '{key}' cannot be modified via API",
+                "applied": 0,
+                "restart_required": False,
+                "results": [],
+            }
+
+    try:
+        with open(config_path, "rb") as f:
+            raw = tomllib.load(f)
+    except Exception as exc:
+        return {
+            "status": "failed",
+            "message": str(exc),
+            "applied": 0,
+            "restart_required": False,
+            "results": [],
+        }
+
+    hot_reload_keys = {"level", "token"}
+    hot_reload_sections = {"logging"}
+    any_restart = False
+    results: list[dict[str, Any]] = []
+
+    for change in changes:
+        section = change.get("section", "")
+        key = change.get("key", "")
+        value = change.get("value")
+
+        # Navigate to section
+        parts = section.split(".")
+        target = raw
+        for part in parts:
+            if part not in target:
+                target[part] = {}
+            target = target[part]
+
+        old_value = target.get(key)
+        target[key] = value
+
+        restart_required = not (key in hot_reload_keys or section in hot_reload_sections)
+        if restart_required:
+            any_restart = True
+
+        results.append(
+            {
+                "section": section,
+                "key": key,
+                "old_value": old_value,
+                "restart_required": restart_required,
+            }
+        )
+
+    try:
+        _write_toml(config_path, raw)
+    except Exception as exc:
+        return {
+            "status": "failed",
+            "message": str(exc),
+            "applied": 0,
+            "restart_required": False,
+            "results": [],
+        }
+
+    applied = len(results)
+    logger.info("Bulk config: %d keys updated (restart_required=%s)", applied, any_restart)
+    return {
+        "status": "applied",
+        "applied": applied,
+        "restart_required": any_restart,
+        "results": results,
+    }
+
+
 def _write_toml(path: Path, data: dict[str, Any]) -> None:
     """Write dict as TOML. Simple implementation for flat/nested dicts."""
     lines: list[str] = []
