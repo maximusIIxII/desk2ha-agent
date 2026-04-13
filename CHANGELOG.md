@@ -3,6 +3,19 @@
 All notable changes to the Desk2HA Agent will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji categories.
 
+## [1.1.0] - 2026-04-13
+
+### ✨ New features
+- **Multi-Host Device Tracking**: USB serial number reading (Windows InstanceId + Linux sysfs), `global_id` and `connected_host` on all peripheral collectors (USB, BT, BLE, HID, HeadsetControl, Wireless Receiver)
+- **HeadsetControl VID:PID keys**: Uses VID:PID instead of product-name slug for stable, roaming-capable device identity
+- **Fleet Management Policies (Phase A)**: PolicyReceiver with `policy.apply`, `policy.status`, `policy.remove` commands via `/v1/commands` API
+- **Compliance checking**: Range rules (`min`/`max`) and exact-value rules, reported in fleet metrics
+- **Fleet metrics**: `fleet.policy_count`, `fleet.compliance_status`, `fleet.violations`, `fleet.last_policy_check` in `/v1/metrics`
+
+### 🔧 Improvements
+- **OpenAPI Schema v2.1.0**: Added `global_id` and `connected_host` fields to PeripheralDevice and PeripheralMetricDevice schemas
+- **Collector base class**: Added `host_device_key` attribute for identity propagation to peripheral collectors
+
 ## [1.0.3] - 2026-04-13
 
 ### 🐛 Bug fixes
