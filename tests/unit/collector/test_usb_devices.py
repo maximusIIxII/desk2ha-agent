@@ -7,6 +7,7 @@ from desk2ha_agent.collector.generic.usb_devices import (
     _SKIP_VID_PIDS,
     _SKIP_VIDS,
     USBDeviceCollector,
+    _extract_serial_from_instance_id,
     _is_generic_name,
 )
 
@@ -45,3 +46,29 @@ def test_is_generic_name():
     assert _is_generic_name("USB Composite Device") is True
     assert _is_generic_name("Jabra Speak2 75") is False
     assert _is_generic_name("usb-verbundgerät") is True
+
+
+def test_extract_serial_from_instance_id():
+    # Real serial number (alphanumeric, no & separator)
+    assert _extract_serial_from_instance_id("USB\\VID_0B0E&PID_24F1\\ABC1234567") == "ABC1234567"
+
+    # Port-path index (contains & separator) — not a serial
+    assert _extract_serial_from_instance_id("USB\\VID_046D&PID_C548\\5&12345678&0&1") == ""
+
+    # Short numeric index — not a serial (< 4 chars)
+    assert _extract_serial_from_instance_id("USB\\VID_046D&PID_C548\\1") == ""
+
+    # Real webcam serial
+    assert _extract_serial_from_instance_id("USB\\VID_413C&PID_C015\\CNXYZ12345") == "CNXYZ12345"
+
+    # Empty / malformed
+    assert _extract_serial_from_instance_id("") == ""
+    assert _extract_serial_from_instance_id("USB\\VID_046D") == ""
+
+
+def test_host_device_key_attribute():
+    """Collector base class should have host_device_key attribute."""
+    collector = USBDeviceCollector()
+    assert collector.host_device_key is None
+    collector.host_device_key = "ST-TEST123"
+    assert collector.host_device_key == "ST-TEST123"

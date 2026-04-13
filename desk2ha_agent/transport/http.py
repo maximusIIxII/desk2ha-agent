@@ -17,6 +17,7 @@ from desk2ha_agent.transport.base import Transport
 if TYPE_CHECKING:
     from desk2ha_agent.collector.base import DeviceInfoProvider
     from desk2ha_agent.config import HttpConfig
+    from desk2ha_agent.lifecycle.policy import PolicyReceiver
     from desk2ha_agent.scheduler import Scheduler
     from desk2ha_agent.state import StateCache
 
@@ -59,11 +60,13 @@ class HttpTransport(Transport):
         state: StateCache,
         scheduler: Scheduler,
         info_provider: DeviceInfoProvider | None = None,
+        policy_receiver: PolicyReceiver | None = None,
     ) -> None:
         self._config = config
         self._state = state
         self._scheduler = scheduler
         self._info_provider = info_provider
+        self._policy_receiver = policy_receiver
         self._start_time = time.monotonic()
         self._app = self._create_app()
         self._runner: web.AppRunner | None = None
@@ -492,6 +495,18 @@ class HttpTransport(Transport):
             version = parameters.get("version")
             result = await self_update(version=version)
             return web.json_response(result)
+
+        # Fleet policy commands
+        if command.startswith("policy.") and self._policy_receiver is not None:
+            if command == "policy.apply":
+                result = await self._policy_receiver.apply_policy(parameters)
+                return web.json_response(result)
+            if command == "policy.status":
+                result = await self._policy_receiver.get_status(parameters)
+                return web.json_response(result)
+            if command == "policy.remove":
+                result = await self._policy_receiver.remove_policy(parameters)
+                return web.json_response(result)
 
         # Route to the right collector
         for collector in self._scheduler.collectors:

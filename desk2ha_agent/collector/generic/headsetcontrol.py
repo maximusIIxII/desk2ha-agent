@@ -108,15 +108,30 @@ class HeadsetControlCollector(Collector):
 
         for i, dev in enumerate(devices):
             product = dev.get("product", dev.get("device", f"headset_{i}"))
-            # Build a stable device key from product name
-            slug = product.lower().replace(" ", "_").replace("-", "_")[:30]
-            prefix = f"peripheral.headset_{slug}"
+
+            # Prefer VID:PID for stable, roaming-capable device key
+            id_vendor = dev.get("id_vendor", "")
+            id_product = dev.get("id_product", "")
+            if id_vendor and id_product:
+                vid_pid = f"{id_vendor.lower()}_{id_product.lower()}"
+                prefix = f"peripheral.headset_{vid_pid}"
+                global_id = f"usb:{id_vendor.upper()}:{id_product.upper()}"
+            else:
+                # Fallback to product name slug (not roaming-capable)
+                slug = product.lower().replace(" ", "_").replace("-", "_")[:30]
+                prefix = f"peripheral.headset_{slug}"
+                global_id = None
 
             metrics[f"{prefix}.model"] = metric_value(product)
 
             vendor = dev.get("vendor")
             if vendor:
                 metrics[f"{prefix}.manufacturer"] = metric_value(vendor)
+
+            # Multi-host tracking
+            metrics[f"{prefix}.global_id"] = metric_value(global_id)
+            if self.host_device_key:
+                metrics[f"{prefix}.connected_host"] = metric_value(self.host_device_key)
 
             # Battery
             battery = dev.get("battery")

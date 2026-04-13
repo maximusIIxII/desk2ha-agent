@@ -109,6 +109,13 @@ async def _run(config_path: Path, *, service_mode: bool = False) -> None:
             info_provider = c
             break
 
+    # Propagate host identity to peripheral collectors for connected_host tracking
+    if info_provider is not None:
+        host_key = info_provider.get_device_key()
+        if host_key:
+            for c in collectors:
+                c.host_device_key = host_key
+
     # Wire components
     state = StateCache()
     intervals = {k: float(v) for k, v in config.collectors.intervals.items()}
@@ -118,6 +125,11 @@ async def _run(config_path: Path, *, service_mode: bool = False) -> None:
     await scheduler.start()
     await asyncio.sleep(1.0)  # Let collectors gather initial data
 
+    # Fleet policy receiver
+    from desk2ha_agent.lifecycle.policy import PolicyReceiver
+
+    policy_receiver = PolicyReceiver()
+
     # Inject agent-level metrics
     from desk2ha_agent.collector.base import metric_value
 
@@ -125,12 +137,12 @@ async def _run(config_path: Path, *, service_mode: bool = False) -> None:
 
     async def _update_agent_metrics() -> None:
         while True:
-            await state.update(
-                {
-                    "agent.version": metric_value(__version__),
-                    "agent.uptime": metric_value(round(time.monotonic() - start_time), unit="s"),
-                }
-            )
+            metrics = {
+                "agent.version": metric_value(__version__),
+                "agent.uptime": metric_value(round(time.monotonic() - start_time), unit="s"),
+            }
+            metrics.update(policy_receiver.get_metrics())
+            await state.update(metrics)
             await asyncio.sleep(30)
 
     agent_metrics_task = asyncio.create_task(_update_agent_metrics(), name="agent-metrics")
@@ -140,7 +152,7 @@ async def _run(config_path: Path, *, service_mode: bool = False) -> None:
     if config.http.enabled:
         from desk2ha_agent.transport.http import HttpTransport
 
-        http = HttpTransport(config.http, state, scheduler, info_provider)
+        http = HttpTransport(config.http, state, scheduler, info_provider, policy_receiver)
         await http.start()
 
     # Start MQTT transport

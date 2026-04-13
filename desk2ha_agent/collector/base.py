@@ -48,6 +48,10 @@ class Collector(abc.ABC):
 
     meta: ClassVar[CollectorMeta]
 
+    # Set by the agent after DeviceInfoProvider resolves the host identity.
+    # Peripheral collectors use this for the ``connected_host`` metric.
+    host_device_key: str | None = None
+
     @abc.abstractmethod
     async def probe(self) -> bool:
         """Check if this collector can run on the current system.

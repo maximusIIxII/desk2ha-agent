@@ -112,6 +112,18 @@ class HIDBatteryCollector(Collector):
                                 )
                                 metrics[f"{prefix}.model"] = metric_value(product)
                                 metrics[f"{prefix}.manufacturer"] = metric_value(manufacturer)
+
+                                # Multi-host tracking
+                                if serial:
+                                    metrics[f"{prefix}.global_id"] = metric_value(
+                                        f"usb:{vid:04X}:{pid:04X}:{serial}"
+                                    )
+                                else:
+                                    metrics[f"{prefix}.global_id"] = metric_value(None)
+                                if self.host_device_key:
+                                    metrics[f"{prefix}.connected_host"] = metric_value(
+                                        self.host_device_key
+                                    )
                                 break
                     except Exception:
                         continue
