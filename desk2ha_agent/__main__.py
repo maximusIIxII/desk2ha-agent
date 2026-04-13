@@ -128,10 +128,22 @@ async def _run(config_path: Path, *, service_mode: bool = False) -> None:
                 c.host_device_key = host_key
             logger.info("Host device key propagated: %s", host_key)
 
-    # Fleet policy receiver
+    # Fleet policy receiver with command executor for enforcement
     from desk2ha_agent.lifecycle.policy import PolicyReceiver
 
-    policy_receiver = PolicyReceiver()
+    async def _policy_command_executor(
+        command: str,
+        target: str,
+        params: dict,
+    ) -> dict:
+        for collector in collectors:
+            try:
+                return await collector.execute_command(command, target, params)
+            except NotImplementedError:
+                continue
+        return {"status": "error", "message": f"No handler for {command}"}
+
+    policy_receiver = PolicyReceiver(command_executor=_policy_command_executor)
 
     # Inject agent-level metrics
     from desk2ha_agent.collector.base import metric_value
@@ -155,7 +167,14 @@ async def _run(config_path: Path, *, service_mode: bool = False) -> None:
     if config.http.enabled:
         from desk2ha_agent.transport.http import HttpTransport
 
-        http = HttpTransport(config.http, state, scheduler, info_provider, policy_receiver)
+        http = HttpTransport(
+            config.http,
+            state,
+            scheduler,
+            info_provider,
+            policy_receiver,
+            config_path=config_path,
+        )
         await http.start()
 
     # Start MQTT transport

@@ -3,6 +3,18 @@
 All notable changes to the Desk2HA Agent will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji categories.
 
+## [1.2.0] - 2026-04-13
+
+### ✨ New features
+- **Fleet Policies Phase B**: DisplayPolicy enforcement — agent enforces brightness, color preset, power nap, auto brightness via DDC/CI commands
+- **Enforcement modes**: `apply_on_connect` (immediate), `enforce_continuous` (on every compliance check), `report_only` (Phase A behavior)
+- **`config.bulk_set` command**: Accept multiple config changes in a single atomic operation via `/v1/commands`
+- **Command executor callback**: PolicyReceiver dispatches enforcement commands through collector system
+
+### 🔧 Improvements
+- **Range enforcement**: Uses midpoint `(min+max)//2` or explicit `default` key from rule spec
+- **HttpTransport**: Added `config_path` parameter for config.bulk_set routing
+
 ## [1.1.0] - 2026-04-13
 
 ### ✨ New features

@@ -8,9 +8,12 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
+
+CommandExecutor = Callable[[str, str, dict[str, Any]], Awaitable[dict[str, Any]]]
 
 logger = logging.getLogger(__name__)
 
@@ -77,13 +80,25 @@ class ComplianceReport:
     checked_at: float = field(default_factory=time.time)
 
 
+_DISPLAY_RULE_COMMANDS: dict[str, str] = {
+    "brightness_percent": "display.set_brightness",
+    "color_preset": "display.set_color_preset",
+    "power_nap": "display.set_power_nap",
+    "auto_brightness": "display.set_auto_brightness",
+}
+
+
 class PolicyReceiver:
     """Receives and caches fleet policies, reports compliance."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        command_executor: CommandExecutor | None = None,
+    ) -> None:
         self._policies: dict[str, Policy] = {}
         self._last_check: float = 0.0
         self._last_report: ComplianceReport | None = None
+        self._command_executor = command_executor
 
     @property
     def policy_count(self) -> int:
@@ -117,15 +132,85 @@ class PolicyReceiver:
             policy.enforcement,
         )
 
+        # Enforce immediately for apply_on_connect mode
+        enforced: list[dict[str, Any]] = []
+        if policy.enforcement in (
+            EnforcementMode.APPLY_ON_CONNECT,
+            EnforcementMode.ENFORCE_CONTINUOUS,
+        ):
+            enforced = await self.enforce_policy(policy)
+
         return {
             "status": "accepted",
             "policy_id": policy_id,
             "enforcement": policy.enforcement,
+            "enforced": enforced,
         }
+
+    async def enforce_policy(self, policy: Policy) -> list[dict[str, Any]]:
+        """Enforce a single policy by dispatching commands."""
+        if self._command_executor is None:
+            logger.debug("No command executor — skipping enforcement for %s", policy.policy_id)
+            return []
+
+        if policy.kind != PolicyKind.DISPLAY:
+            return []
+
+        results: list[dict[str, Any]] = []
+        for rule_key, rule_spec in policy.rules.items():
+            cmd = _DISPLAY_RULE_COMMANDS.get(rule_key)
+            if cmd is None:
+                continue
+
+            value = self._enforcement_value(rule_spec)
+            if value is None:
+                continue
+
+            try:
+                result = await self._command_executor(cmd, "display.0", {"value": value})
+                results.append({"rule_key": rule_key, "command": cmd, "value": value, **result})
+            except Exception as exc:
+                logger.warning("Enforcement failed for %s: %s", rule_key, exc)
+                results.append(
+                    {
+                        "rule_key": rule_key,
+                        "command": cmd,
+                        "value": value,
+                        "status": "error",
+                        "message": str(exc),
+                    }
+                )
+
+        return results
+
+    async def enforce_all(self) -> list[dict[str, Any]]:
+        """Enforce all policies with enforce_continuous mode."""
+        results: list[dict[str, Any]] = []
+        for policy in self._policies.values():
+            if policy.enforcement == EnforcementMode.ENFORCE_CONTINUOUS:
+                results.extend(await self.enforce_policy(policy))
+        return results
+
+    @staticmethod
+    def _enforcement_value(rule_spec: Any) -> Any:
+        """Extract the value to enforce from a rule specification."""
+        if isinstance(rule_spec, dict):
+            # Explicit default takes precedence
+            if "default" in rule_spec:
+                return rule_spec["default"]
+            # Exact match
+            if "value" in rule_spec:
+                return rule_spec["value"]
+            # Range: use midpoint
+            if "min" in rule_spec and "max" in rule_spec:
+                return (rule_spec["min"] + rule_spec["max"]) // 2
+            return None
+        # Scalar: use directly
+        return rule_spec
 
     async def get_status(self, params: dict[str, Any]) -> dict[str, Any]:
         """Handle policy.status command — return compliance report."""
-        report = self.check_compliance()
+        report = await self.check_compliance()
         return {
             "status": report.status,
             "policy_count": report.policy_count,
@@ -151,7 +236,7 @@ class PolicyReceiver:
             return {"status": "removed", "policy_id": policy_id}
         return {"status": "not_found", "policy_id": policy_id}
 
-    def check_compliance(
+    async def check_compliance(
         self,
         current_values: dict[str, Any] | None = None,
     ) -> ComplianceReport:
@@ -200,6 +285,11 @@ class PolicyReceiver:
         )
         self._last_check = now
         self._last_report = report
+
+        # Enforce continuous policies when violations are found
+        if violations:
+            await self.enforce_all()
+
         return report
 
     @staticmethod
