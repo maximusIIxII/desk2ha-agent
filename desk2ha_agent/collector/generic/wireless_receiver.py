@@ -159,6 +159,11 @@ class WirelessReceiverCollector(Collector):
             if receiver["serial"]:
                 metrics[f"{prefix}.serial"] = metric_value(receiver["serial"])
 
+            # Multi-host tracking: receivers stay with their host
+            metrics[f"{prefix}.global_id"] = metric_value(None)
+            if self.host_device_key:
+                metrics[f"{prefix}.connected_host"] = metric_value(self.host_device_key)
+
             # Try to enumerate paired devices for Logitech receivers
             if receiver["manufacturer"] == "Logitech":
                 paired = self._enumerate_logitech_devices(receiver)

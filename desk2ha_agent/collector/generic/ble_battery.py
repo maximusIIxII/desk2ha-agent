@@ -91,6 +91,14 @@ class BLEBatteryCollector(Collector):
                             )
                             metrics[f"{prefix}.model"] = metric_value(name)
 
+                            # Multi-host tracking: BLE MAC is globally unique
+                            clean_addr = device.address.replace(":", "").replace("-", "").upper()
+                            metrics[f"{prefix}.global_id"] = metric_value(f"bt:{clean_addr}")
+                            if self.host_device_key:
+                                metrics[f"{prefix}.connected_host"] = metric_value(
+                                    self.host_device_key
+                                )
+
                         # Try to read device info
                         try:
                             mfr_data = await client.read_gatt_char(MANUFACTURER_NAME_CHAR_UUID)

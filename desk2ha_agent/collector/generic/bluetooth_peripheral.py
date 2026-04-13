@@ -243,6 +243,13 @@ class BluetoothPeripheralCollector(Collector):
                 metrics[f"{prefix}.transport"] = metric_value("ble")
                 metrics[f"{prefix}.connected"] = metric_value(True)
 
+                # Multi-host tracking: BT MAC is globally unique
+                if address:
+                    clean_addr = address.replace(":", "").replace("-", "").upper()
+                    metrics[f"{prefix}.global_id"] = metric_value(f"bt:{clean_addr}")
+                if self.host_device_key:
+                    metrics[f"{prefix}.connected_host"] = metric_value(self.host_device_key)
+
                 # Infer manufacturer from name pattern (may be overridden by GATT below)
                 inferred_mfg = _infer_manufacturer(name)
                 if inferred_mfg:
@@ -356,6 +363,13 @@ class BluetoothPeripheralCollector(Collector):
             metrics[f"{prefix}.transport"] = metric_value("classic")
             metrics[f"{prefix}.connected"] = metric_value(connected)
 
+            # Multi-host tracking: BT MAC is globally unique
+            if address:
+                clean_addr = address.replace(":", "").replace("-", "").upper()
+                metrics[f"{prefix}.global_id"] = metric_value(f"bt:{clean_addr}")
+            if self.host_device_key:
+                metrics[f"{prefix}.connected_host"] = metric_value(self.host_device_key)
+
             # Infer manufacturer from name pattern
             inferred_mfg = _infer_manufacturer(name)
             if inferred_mfg:
@@ -403,6 +417,12 @@ class BluetoothPeripheralCollector(Collector):
             metrics[f"{prefix}.type"] = metric_value(_classify_device(name))
             metrics[f"{prefix}.transport"] = metric_value("ble")
             metrics[f"{prefix}.connected"] = metric_value(True)
+
+            # Multi-host tracking: BT MAC is globally unique
+            clean_addr = addr.replace(":", "").replace("-", "").upper()
+            metrics[f"{prefix}.global_id"] = metric_value(f"bt:{clean_addr}")
+            if self.host_device_key:
+                metrics[f"{prefix}.connected_host"] = metric_value(self.host_device_key)
 
             # Infer manufacturer from name pattern
             inferred_mfg = _infer_manufacturer(name)

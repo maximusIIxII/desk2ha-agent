@@ -95,6 +95,22 @@ def _is_generic_name(name: str) -> bool:
     return any(g in lower for g in _GENERIC_NAMES)
 
 
+def _extract_serial_from_instance_id(instance_id: str) -> str:
+    """Extract USB serial number from Windows PnP InstanceId.
+
+    Format: USB\\VID_xxxx&PID_xxxx\\<serial_or_index>
+    The last segment is the serial if it contains alphanumerics (not just a port index).
+    Port indices are typically short numeric strings like "5&12345&0&1".
+    """
+    parts = instance_id.split("\\")
+    if len(parts) >= 3:
+        candidate = parts[-1]
+        # Reject port-path style IDs (contain & separators)
+        if "&" not in candidate and len(candidate) >= 4:
+            return candidate
+    return ""
+
+
 class USBDeviceCollector(Collector):
     """Enumerate connected USB devices."""
 
@@ -215,9 +231,15 @@ class USBDeviceCollector(Collector):
                 if friendly_mfg.startswith("(Standard"):
                     friendly_mfg = ""
 
-                # Build stable device ID from VID:PID (avoids index-shift issues)
+                # Extract USB serial number from InstanceId
+                serial = _extract_serial_from_instance_id(did)
+
+                # Build stable device ID from VID:PID (+ serial if available)
                 if vid and pid:
-                    dev_id = f"usb_{vid.lower()}_{pid.lower()}"
+                    if serial:
+                        dev_id = f"usb_{vid.lower()}_{pid.lower()}_{serial[:12].lower()}"
+                    else:
+                        dev_id = f"usb_{vid.lower()}_{pid.lower()}"
                 else:
                     dev_id = f"usb_{idx}"
                     idx += 1
@@ -232,6 +254,17 @@ class USBDeviceCollector(Collector):
                     metrics[f"{prefix}.manufacturer"] = metric_value(friendly_mfg)
                 if vid and pid:
                     metrics[f"{prefix}.vid_pid"] = metric_value(vid_pid_key)
+
+                # Multi-host tracking: global_id + connected_host
+                if serial and vid and pid:
+                    metrics[f"{prefix}.global_id"] = metric_value(
+                        f"usb:{vid.upper()}:{pid.upper()}:{serial}"
+                    )
+                elif vid and pid:
+                    # VID:PID-only fallback — not globally unique
+                    metrics[f"{prefix}.global_id"] = metric_value(None)
+                if self.host_device_key:
+                    metrics[f"{prefix}.connected_host"] = metric_value(self.host_device_key)
 
             logger.debug("USB enumeration: found %d devices", idx)
             return metrics
@@ -272,8 +305,17 @@ class USBDeviceCollector(Collector):
                 if vid.upper() in _SKIP_VIDS:
                     continue
 
+                # Read serial number from sysfs
+                serial = ""
+                serial_file = dev_dir / "serial"
+                if serial_file.exists():
+                    serial = serial_file.read_text().strip()
+
                 if vid and pid:
-                    dev_id = f"usb_{vid.lower()}_{pid.lower()}"
+                    if serial:
+                        dev_id = f"usb_{vid.lower()}_{pid.lower()}_{serial[:12].lower()}"
+                    else:
+                        dev_id = f"usb_{vid.lower()}_{pid.lower()}"
                 else:
                     dev_id = f"usb_{idx}"
                     idx += 1
@@ -287,6 +329,16 @@ class USBDeviceCollector(Collector):
                     metrics[f"{prefix}.manufacturer"] = metric_value(manufacturer)
                 if vid and pid:
                     metrics[f"{prefix}.vid_pid"] = metric_value(f"{vid}:{pid}")
+
+                # Multi-host tracking: global_id + connected_host
+                if serial and vid and pid:
+                    metrics[f"{prefix}.global_id"] = metric_value(
+                        f"usb:{vid.upper()}:{pid.upper()}:{serial}"
+                    )
+                else:
+                    metrics[f"{prefix}.global_id"] = metric_value(None)
+                if self.host_device_key:
+                    metrics[f"{prefix}.connected_host"] = metric_value(self.host_device_key)
 
             except Exception:
                 continue
