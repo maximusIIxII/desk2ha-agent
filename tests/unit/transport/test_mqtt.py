@@ -95,6 +95,8 @@ def test_on_state_update_publishes(mqtt_transport):
     mqtt_transport._client = client
     mqtt_transport._connected = True
     mqtt_transport._discovery_published = True
+    # Mark key as already discovered so only state is published
+    mqtt_transport._discovered_keys = {"system.cpu_usage_percent"}
 
     metrics = {"system.cpu_usage_percent": {"value": 42.0, "timestamp": 1.0}}
     mqtt_transport._on_state_update(metrics)

@@ -64,3 +64,23 @@ class HelperClient:
                 logger.info("Helper not reachable at %s", self._base_url)
                 self._available = False
         return {}
+
+    async def send_command(
+        self, command: str, target: str, parameters: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Send a command to the helper for execution. Returns result or raises."""
+        try:
+            async with (
+                aiohttp.ClientSession(timeout=_TIMEOUT) as session,
+                session.post(
+                    f"{self._base_url}/command",
+                    headers=self._auth_headers(),
+                    json={"command": command, "target": target, "parameters": parameters},
+                ) as resp,
+            ):
+                result = await resp.json()
+                if resp.status == 200:
+                    return result
+                raise RuntimeError(result.get("error", f"HTTP {resp.status}"))
+        except (aiohttp.ClientError, OSError) as exc:
+            raise RuntimeError(f"Helper not reachable: {exc}") from exc

@@ -35,6 +35,7 @@ _SKIP_NAMES = {
     "fehler beim anfordern",
     "device descriptor request failed",
     "port reset failed",
+    "verbundger",  # German for "composite device"
 }
 
 _SKIP_VIDS = {
@@ -57,6 +58,12 @@ _SKIP_VID_PIDS = {
     "046D:C545",  # Logitech Lightspeed Receiver
     "0B0E:245D",  # Jabra Link 380
     "0B0E:2481",  # Jabra Link 390
+    # Dell webcams (dell_webcam collector has extended controls)
+    "413C:C015",  # Dell WB7022
+    "413C:C011",  # Dell WB5023
+    "413C:B0A6",  # Dell WB7022 (alt PID)
+    # Dell peripherals via Secure Link receiver (dell_peripheral collector)
+    "413C:D001",  # Dell KM7321W Keyboard (virtual HID via receiver)
 }
 
 # Known VID:PID → friendly name + manufacturer
@@ -198,7 +205,15 @@ class USBDeviceCollector(Collector):
                     continue
 
                 # Skip interface sub-devices (MI_01, MI_02, etc.)
-                if "&MI_" in did and not did.endswith("MI_00"):
+                # Keep MI_00 (primary interface); MI segment is mid-path,
+                # e.g. USB\VID_0B0E&PID_24F1&MI_00\8&FE2111B&0&0000
+                # Also keep non-MI_00 interfaces that are distinct devices
+                # (e.g. IR webcam on MI_02 alongside RGB webcam on MI_00).
+                if (
+                    "&MI_" in did
+                    and "&MI_00\\" not in did
+                    and (not name or _is_generic_name(name) or "input" in name_lower)
+                ):
                     continue
 
                 mfg = getattr(dev, "Manufacturer", "") or ""
@@ -231,15 +246,24 @@ class USBDeviceCollector(Collector):
                 if friendly_mfg.startswith("(Standard"):
                     friendly_mfg = ""
 
-                # Extract USB serial number from InstanceId
+                # Extract USB serial number and MI index from InstanceId
                 serial = _extract_serial_from_instance_id(did)
 
-                # Build stable device ID from VID:PID (+ serial if available)
+                # Extract MI index for multi-interface devices
+                mi_suffix = ""
+                if "&MI_" in did:
+                    for part in did.split("&"):
+                        if part.startswith("MI_"):
+                            mi_idx = part.split("\\")[0]  # MI_00, MI_02, etc.
+                            mi_suffix = f"_{mi_idx.lower()}"
+                            break
+
+                # Build stable device ID from VID:PID (+ serial/MI if available)
                 if vid and pid:
                     if serial:
                         dev_id = f"usb_{vid.lower()}_{pid.lower()}_{serial[:12].lower()}"
                     else:
-                        dev_id = f"usb_{vid.lower()}_{pid.lower()}"
+                        dev_id = f"usb_{vid.lower()}_{pid.lower()}{mi_suffix}"
                 else:
                     dev_id = f"usb_{idx}"
                     idx += 1
@@ -266,7 +290,8 @@ class USBDeviceCollector(Collector):
                 if self.host_device_key:
                     metrics[f"{prefix}.connected_host"] = metric_value(self.host_device_key)
 
-            logger.debug("USB enumeration: found %d devices", idx)
+            peripheral_count = sum(1 for k in metrics if k.endswith(".model"))
+            logger.debug("USB enumeration: found %d peripheral(s)", peripheral_count)
             return metrics
 
         except Exception:

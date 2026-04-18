@@ -10,4 +10,5 @@ from __future__ import annotations
 # Each must expose a COLLECTOR_CLASS with the standard Collector interface.
 ELEVATED_MODULES: list[str] = [
     "desk2ha_agent.collector.vendor.dell_dcm",
+    "desk2ha_agent.collector.generic.ddcci",
 ]

@@ -182,6 +182,11 @@ async def _run(config_path: Path, *, service_mode: bool = False) -> None:
     if config.mqtt.enabled:
         from desk2ha_agent.transport.mqtt import MqttTransport
 
+        # When HTTP custom component is also active, skip peripheral/webcam
+        # discovery in MQTT — the custom component creates proper sub-devices.
+        if config.http.enabled and not config.mqtt.discovery_exclude_prefixes:
+            config.mqtt.discovery_exclude_prefixes = ["peripheral.", "webcam."]
+
         mqtt_transport = MqttTransport(config.mqtt, state, info_provider, scheduler)
         await mqtt_transport.start()
 

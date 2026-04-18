@@ -5,6 +5,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji catego
 
 ## [Unreleased]
 
+### ✨ New features
+- **Dell Webcam Extension Units (FK-14)**: HDR, AI Auto-Framing, Field of View, Noise Reduction, Digital Zoom for Dell WB7022/WB5023 via HID Feature Reports (usage page 0xFF83)
+- **Dell Peripheral Controls (FK-15)**: Keyboard backlight level, mouse DPI, battery level, active slot for Dell KB900/MS900 via Secure Link Receivers (413c:2119/2141)
+- **Dock Telemetry (FK-16)**: WD22TB4/WD19TBS model, firmware, serial, connection type via WMI `DCIM_DockingDevice`; Thunderbolt link status via PnP enumeration
+- **Logitech HID++ 2.0 Extension (FK-17)**: SmartShift mode/threshold, hi-res wheel, thumb wheel, active host switching, wireless link quality, color LED via feature discovery (IRoot 0x0000)
+- **Prometheus Endpoint (FK-20)**: `/v1/metrics/prometheus` — OpenMetrics text exposition with `desk2ha_` prefix, unit suffixes, labels
+- **USB Watchdog (FK-19)**: Periodic USB device count monitoring, auto-reset capability, `system.usb_reset` command, `system.usb_device_count` and `system.usb_reset_count` metrics
+- **KVM Diagnose Tool (FK-19)**: `tools/kvm_diagnose.py` CLI with before/after snapshot comparison for USB/Thunderbolt switch diagnosis
+- **macOS BLE UUID fallback (FK-21)**: CoreBluetooth UUID-based `global_id` (`bt-uuid:` prefix) since macOS doesn't expose BLE MAC addresses
+- **Lenovo WMI Extension (FK-22)**: Battery health, cycle count, system info (BIOS version, Secure Boot)
+- **HP WMI Extension (FK-22)**: Battery health, cycle count, BIOS version via Win32_BIOS
+- **HeadsetControl Extended**: Equalizer preset, inactive timeout, voice prompts commands (`headset.set_equalizer_preset`, `headset.set_inactive_timeout`, `headset.set_voice_prompts`)
+- **Battery Charge Mode**: `battery.set_charge_mode` command (Lenovo conservation/normal/express)
+
+### 🐛 Bug fixes
+- **DDC/CI under LocalSystem**: `ddcci` collector now probes via WMI `Win32_DesktopMonitor` (works without Desktop session) and is registered in `ELEVATED_MODULES` so the user-session helper serves monitor metrics to the LocalSystem agent. Fixes regression where the Dell U5226KW was invisible after v1.3.0 deploy.
+
+### 🔧 Improvements
+- **OpenAPI Schema v2.2.0**: New endpoints, commands, metrics for all FK-14 through FK-22 features
+- **Test coverage**: Added tests for dell_webcam, dell_peripheral, headsetcontrol extended features, logitech_hidpp, usb_watchdog, Prometheus endpoint, BLE macOS helpers, dock telemetry (281+ tests total)
+- **Peripheral DB**: Added Dell Thunderbolt Dock entries (WD22TB4, WD19TBS, WD19TB)
+
 ## [1.3.0] - 2026-04-18
 
 ### 🔒 Security

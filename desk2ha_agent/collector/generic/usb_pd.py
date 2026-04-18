@@ -108,6 +108,10 @@ class USBPDCollector(Collector):
             except Exception:
                 logger.debug("WMI power query failed", exc_info=True)
 
+            # Fallback: if WMI failed to produce power.charging, derive from psutil
+            if "power.charging" not in metrics and battery.power_plugged is not None:
+                metrics["power.charging"] = metric_value(battery.power_plugged)
+
         except Exception:
             logger.debug("USB PD Windows collection failed", exc_info=True)
 

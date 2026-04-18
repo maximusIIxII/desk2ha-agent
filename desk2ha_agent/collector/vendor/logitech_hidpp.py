@@ -49,6 +49,26 @@ _FEAT_ADJUSTABLE_DPI = 0x2201  # Adjustable DPI
 _FEAT_BACKLIGHT2 = 0x1982  # Backlight 2
 _FEAT_DEVICE_NAME = 0x0005  # Device Name
 _FEAT_DEVICE_TYPE = 0x0003  # Device Type and Name (FW info)
+_FEAT_SMART_SHIFT = 0x2110  # SmartShift (scroll wheel mode)
+_FEAT_HIRES_WHEEL = 0x2121  # Hi-Res Wheel
+_FEAT_THUMB_WHEEL = 0x2150  # Thumb Wheel
+_FEAT_CHANGE_HOST = 0x1814  # Change Host (multi-device)
+_FEAT_WIRELESS_STATUS = 0x1D4B  # Wireless Device Status
+_FEAT_COLOR_LED = 0x8070  # Color LED Effects
+
+# All known features for dynamic discovery
+_KNOWN_FEATURES: dict[int, str] = {
+    _FEAT_BATTERY_UNIFIED: "battery_unified",
+    _FEAT_BATTERY_VOLTAGE: "battery_voltage",
+    _FEAT_ADJUSTABLE_DPI: "adjustable_dpi",
+    _FEAT_BACKLIGHT2: "backlight2",
+    _FEAT_SMART_SHIFT: "smart_shift",
+    _FEAT_HIRES_WHEEL: "hires_wheel",
+    _FEAT_THUMB_WHEEL: "thumb_wheel",
+    _FEAT_CHANGE_HOST: "change_host",
+    _FEAT_WIRELESS_STATUS: "wireless_status",
+    _FEAT_COLOR_LED: "color_led",
+}
 
 # Device types (from HID++ 2.0 deviceType feature)
 _DEVICE_TYPE_MAP = {
@@ -90,6 +110,8 @@ class _HidPPDevice:
         # Feature index cache: feature_id -> index (HID++ 2.0)
         self._feature_cache: dict[int, int] = {}
         self._last_battery: dict[str, Any] = {}
+        # Discovered features: name -> feature_index
+        self.features: dict[str, int] = {}
 
     def get_feature_index(self, h: Any, feature_id: int) -> int | None:
         """Look up a feature index via IRoot (0x0000)."""
@@ -194,6 +216,130 @@ class _HidPPDevice:
         except Exception:
             return None
 
+    def discover_features(self, h: Any) -> None:
+        """Probe all known HID++ 2.0 features and cache which are available."""
+        for feat_id, feat_name in _KNOWN_FEATURES.items():
+            idx = self.get_feature_index(h, feat_id)
+            if idx is not None:
+                self.features[feat_name] = idx
+
+    def read_smart_shift(self, h: Any) -> dict[str, Any] | None:
+        """Read SmartShift configuration (0x2110)."""
+        idx = self.features.get("smart_shift")
+        if idx is None:
+            idx = self.get_feature_index(h, _FEAT_SMART_SHIFT)
+        if idx is None:
+            return None
+        try:
+            msg = _build_hidpp_long(self.device_idx, idx, 0)
+            h.write(msg)
+            time.sleep(0.05)
+            for _ in range(30):
+                resp = h.read(20)
+                if not resp or len(resp) < 7:
+                    continue
+                if resp[0] == _REPORT_LONG and resp[2] == idx:
+                    # resp[4]=mode (1=ratchet, 2=freespin), resp[5]=threshold
+                    mode = "freespin" if resp[4] == 2 else "ratchet"
+                    threshold = resp[5]
+                    return {"mode": mode, "threshold": threshold}
+            return None
+        except Exception:
+            return None
+
+    def read_hires_wheel(self, h: Any) -> dict[str, Any] | None:
+        """Read Hi-Res Wheel configuration (0x2121)."""
+        idx = self.features.get("hires_wheel")
+        if idx is None:
+            idx = self.get_feature_index(h, _FEAT_HIRES_WHEEL)
+        if idx is None:
+            return None
+        try:
+            msg = _build_hidpp_long(self.device_idx, idx, 0)
+            h.write(msg)
+            time.sleep(0.05)
+            for _ in range(30):
+                resp = h.read(20)
+                if not resp or len(resp) < 6:
+                    continue
+                if resp[0] == _REPORT_LONG and resp[2] == idx:
+                    # resp[4] bit0=hires enabled, bit1=invert
+                    hires = bool(resp[4] & 0x01)
+                    invert = bool(resp[4] & 0x02)
+                    return {"hires": hires, "invert": invert}
+            return None
+        except Exception:
+            return None
+
+    def read_thumb_wheel(self, h: Any) -> dict[str, Any] | None:
+        """Read Thumb Wheel configuration (0x2150)."""
+        idx = self.features.get("thumb_wheel")
+        if idx is None:
+            idx = self.get_feature_index(h, _FEAT_THUMB_WHEEL)
+        if idx is None:
+            return None
+        try:
+            msg = _build_hidpp_long(self.device_idx, idx, 0)
+            h.write(msg)
+            time.sleep(0.05)
+            for _ in range(30):
+                resp = h.read(20)
+                if not resp or len(resp) < 6:
+                    continue
+                if resp[0] == _REPORT_LONG and resp[2] == idx:
+                    invert = bool(resp[4] & 0x01)
+                    return {"invert": invert}
+            return None
+        except Exception:
+            return None
+
+    def read_change_host(self, h: Any) -> dict[str, Any] | None:
+        """Read Change Host info (0x1814) — active host index."""
+        idx = self.features.get("change_host")
+        if idx is None:
+            idx = self.get_feature_index(h, _FEAT_CHANGE_HOST)
+        if idx is None:
+            return None
+        try:
+            # getHostInfo: function 0
+            msg = _build_hidpp_long(self.device_idx, idx, 0)
+            h.write(msg)
+            time.sleep(0.05)
+            for _ in range(30):
+                resp = h.read(20)
+                if not resp or len(resp) < 6:
+                    continue
+                if resp[0] == _REPORT_LONG and resp[2] == idx:
+                    num_hosts = resp[4]
+                    current_host = resp[5]
+                    return {"num_hosts": num_hosts, "current_host": current_host}
+            return None
+        except Exception:
+            return None
+
+    def read_wireless_status(self, h: Any) -> dict[str, Any] | None:
+        """Read Wireless Device Status (0x1D4B)."""
+        idx = self.features.get("wireless_status")
+        if idx is None:
+            idx = self.get_feature_index(h, _FEAT_WIRELESS_STATUS)
+        if idx is None:
+            return None
+        try:
+            msg = _build_hidpp_long(self.device_idx, idx, 0)
+            h.write(msg)
+            time.sleep(0.05)
+            for _ in range(30):
+                resp = h.read(20)
+                if not resp or len(resp) < 6:
+                    continue
+                if resp[0] == _REPORT_LONG and resp[2] == idx:
+                    # resp[4] = reconnection status, resp[5] = link quality
+                    link_quality = resp[5]
+                    return {"link_quality": link_quality}
+            return None
+        except Exception:
+            return None
+
 
 class LogitechHidPPCollector(Collector):
     """Enumerate and read Logitech HID++ wireless peripherals."""
@@ -291,11 +437,13 @@ class LogitechHidPPCollector(Collector):
                         if got_response:
                             product = recv.get("product_string", "Logitech Device")
                             device = _HidPPDevice(recv["path"], dev_idx, product)
+                            device.discover_features(h)
                             self._devices.append(device)
                             logger.info(
-                                "HID++ device found: idx=%d on %s",
+                                "HID++ device found: idx=%d on %s, features=%s",
                                 dev_idx,
                                 product,
+                                list(device.features.keys()),
                             )
                     except Exception:
                         continue
@@ -367,6 +515,42 @@ class LogitechHidPPCollector(Collector):
                         if dev.device_type == "unknown":
                             dev.device_type = "keyboard"
 
+                    # SmartShift (MX Master scroll wheel)
+                    smartshift = dev.read_smart_shift(h)
+                    if smartshift:
+                        metrics[f"{prefix}.smartshift_mode"] = metric_value(smartshift["mode"])
+                        metrics[f"{prefix}.smartshift_threshold"] = metric_value(
+                            float(smartshift["threshold"])
+                        )
+
+                    # Hi-Res Wheel
+                    hires = dev.read_hires_wheel(h)
+                    if hires:
+                        metrics[f"{prefix}.hires_wheel"] = metric_value(hires["hires"])
+                        metrics[f"{prefix}.hires_wheel_invert"] = metric_value(hires["invert"])
+
+                    # Thumb Wheel
+                    thumb = dev.read_thumb_wheel(h)
+                    if thumb:
+                        metrics[f"{prefix}.thumb_wheel_invert"] = metric_value(thumb["invert"])
+
+                    # Change Host (multi-device switching)
+                    host_info = dev.read_change_host(h)
+                    if host_info:
+                        metrics[f"{prefix}.active_host"] = metric_value(
+                            float(host_info["current_host"])
+                        )
+                        metrics[f"{prefix}.num_hosts"] = metric_value(
+                            float(host_info["num_hosts"])
+                        )
+
+                    # Wireless Status
+                    wireless = dev.read_wireless_status(h)
+                    if wireless:
+                        metrics[f"{prefix}.link_quality"] = metric_value(
+                            float(wireless["link_quality"]), unit="%"
+                        )
+
                     if dev.device_type != "unknown":
                         metrics[f"{prefix}.device_type"] = metric_value(dev.device_type)
 
@@ -383,6 +567,10 @@ class LogitechHidPPCollector(Collector):
             return await asyncio.to_thread(self._set_dpi, target, parameters)
         if command == "peripheral.set_backlight":
             return await asyncio.to_thread(self._set_backlight, target, parameters)
+        if command == "peripheral.set_smartshift":
+            return await asyncio.to_thread(self._set_smartshift, target, parameters)
+        if command == "peripheral.switch_host":
+            return await asyncio.to_thread(self._switch_host, target, parameters)
         raise NotImplementedError
 
     def _find_device(self, target: str) -> _HidPPDevice | None:
@@ -457,6 +645,71 @@ class LogitechHidPPCollector(Collector):
 
             h.close()
             return {"status": "completed", "level": level}
+        except Exception as exc:
+            return {"status": "failed", "message": str(exc)}
+
+    def _set_smartshift(self, target: str, parameters: dict[str, Any]) -> dict[str, Any]:
+        import hid
+
+        dev = self._find_device(target)
+        if dev is None:
+            return {"status": "failed", "message": f"Device not found: {target}"}
+
+        mode = parameters.get("mode", "ratchet")
+        threshold = int(parameters.get("threshold", 10))
+        mode_byte = 2 if mode == "freespin" else 1
+        threshold = max(0, min(255, threshold))
+
+        try:
+            h = hid.device()
+            h.open_path(dev.hid_path)
+            h.set_nonblocking(True)
+            while h.read(20):
+                pass
+
+            idx = dev.get_feature_index(h, _FEAT_SMART_SHIFT)
+            if idx is None:
+                h.close()
+                return {"status": "failed", "message": "SmartShift not supported"}
+
+            # setSmartShift: function 1, mode, threshold
+            msg = _build_hidpp_long(dev.device_idx, idx, 1, mode_byte, threshold)
+            h.write(msg)
+            time.sleep(0.05)
+
+            h.close()
+            return {"status": "completed", "mode": mode, "threshold": threshold}
+        except Exception as exc:
+            return {"status": "failed", "message": str(exc)}
+
+    def _switch_host(self, target: str, parameters: dict[str, Any]) -> dict[str, Any]:
+        import hid
+
+        dev = self._find_device(target)
+        if dev is None:
+            return {"status": "failed", "message": f"Device not found: {target}"}
+
+        host_index = int(parameters.get("host_index", parameters.get("value", 0)))
+
+        try:
+            h = hid.device()
+            h.open_path(dev.hid_path)
+            h.set_nonblocking(True)
+            while h.read(20):
+                pass
+
+            idx = dev.get_feature_index(h, _FEAT_CHANGE_HOST)
+            if idx is None:
+                h.close()
+                return {"status": "failed", "message": "Change Host not supported"}
+
+            # setCurrentHost: function 1, host_index
+            msg = _build_hidpp_long(dev.device_idx, idx, 1, host_index)
+            h.write(msg)
+            time.sleep(0.05)
+
+            h.close()
+            return {"status": "completed", "host_index": host_index}
         except Exception as exc:
             return {"status": "failed", "message": str(exc)}
 

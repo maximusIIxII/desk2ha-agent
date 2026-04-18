@@ -1,8 +1,8 @@
 """Dell Command | Monitor vendor collector.
 
-Reads detailed thermals (CPU, GPU, SSD, skin, ambient), fan speeds, and
-power delivery data from the ``root\\dcim\\sysman`` WMI namespace exposed
-by Dell Command | Monitor (DCM).
+Reads detailed thermals (CPU, GPU, SSD, skin, ambient), fan speeds,
+power delivery data, and dock telemetry from the ``root\\dcim\\sysman``
+WMI namespace exposed by Dell Command | Monitor (DCM).
 
 When running without admin privileges, this collector queries the
 elevated helper process (desk2ha-helper) on localhost:9694 instead.
@@ -92,6 +92,7 @@ class DellDcmCollector(Collector):
         self._use_helper: bool = False
         self._helper_client: Any = None
         self._power_warned: bool = False
+        self._dock_warned: bool = False
 
     async def probe(self) -> bool:
         """Check if DCM data is accessible (directly or via helper)."""
@@ -184,6 +185,7 @@ class DellDcmCollector(Collector):
             self._collect_thermals(conn, metrics, now)
             self._collect_fans(conn, metrics, now)
             self._collect_power(conn, metrics, now)
+            self._collect_dock(conn, metrics, now)
 
             return metrics
         except Exception:
@@ -266,6 +268,61 @@ class DellDcmCollector(Collector):
             if not self._power_warned:
                 logger.info("DCM power classes not available on this model")
                 self._power_warned = True
+
+    def _collect_dock(self, conn: object, metrics: dict[str, Any], now: float) -> None:
+        """Query DCIM_DockingDevice for dock telemetry."""
+        try:
+            docks = conn.query(  # type: ignore[attr-defined]
+                "SELECT * FROM DCIM_DockingDevice"
+            )
+            for i, dock in enumerate(docks):
+                prefix = f"dock.{i}"
+                model = getattr(dock, "Model", None) or getattr(dock, "ElementName", None)
+                if model:
+                    metrics[f"{prefix}.model"] = metric_value(str(model))
+
+                firmware = getattr(dock, "FirmwareVersion", None)
+                if firmware:
+                    metrics[f"{prefix}.firmware"] = metric_value(str(firmware))
+
+                serial = getattr(dock, "SerialNumber", None)
+                if serial:
+                    metrics[f"{prefix}.serial"] = metric_value(str(serial))
+
+                conn_type = getattr(dock, "ConnectionType", None)
+                if conn_type:
+                    metrics[f"{prefix}.connection_type"] = metric_value(str(conn_type))
+
+                metrics[f"{prefix}.connected"] = metric_value(True)
+
+            # Thunderbolt link info via Win32_PnPEntity
+            self._collect_thunderbolt_link(conn, metrics, now)
+
+        except Exception:
+            if not self._dock_warned:
+                logger.info("DCM dock classes not available on this model")
+                self._dock_warned = True
+
+    def _collect_thunderbolt_link(self, conn: object, metrics: dict[str, Any], now: float) -> None:
+        """Query Thunderbolt device status via standard WMI."""
+        try:
+            import wmi as wmi_mod  # type: ignore[import-untyped]
+
+            std_conn = wmi_mod.WMI()
+            tb_devices = std_conn.query(
+                "SELECT * FROM Win32_PnPEntity WHERE PNPClass = 'Thunderbolt'"
+            )
+            tb_count = 0
+            for dev in tb_devices:
+                status = getattr(dev, "Status", "")
+                if status == "OK":
+                    tb_count += 1
+
+            if tb_count > 0:
+                metrics["dock.0.tb_link_active"] = metric_value(True)
+                metrics["dock.0.tb_device_count"] = metric_value(float(tb_count))
+        except Exception:
+            logger.debug("Thunderbolt WMI query failed", exc_info=True)
 
     async def execute_command(
         self, command: str, target: str, parameters: dict[str, Any]

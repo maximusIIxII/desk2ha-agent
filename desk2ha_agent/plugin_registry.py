@@ -41,6 +41,8 @@ COLLECTOR_MODULES: list[str] = [
     "desk2ha_agent.collector.vendor.steelseries",
     "desk2ha_agent.collector.vendor.steelseries_sonar",
     "desk2ha_agent.collector.vendor.razer",
+    "desk2ha_agent.collector.vendor.dell_webcam",
+    "desk2ha_agent.collector.vendor.dell_peripheral",
 ]
 
 

@@ -140,15 +140,12 @@ class LogitechLitraCollector(Collector):
             if self.host_device_key:
                 metrics[f"{prefix}.connected_host"] = metric_value(self.host_device_key)
 
-            # Use cached power state — never send Power-GET (wakes the device).
+            # Detect power state by probing brightness (does NOT wake device).
+            # Power-GET (0x01) wakes the Litra Glow as a firmware side-effect,
+            # so we never send it.  Instead we read brightness: a valid non-zero
+            # response means the light is on; None/failure means off.
             cached_power = self._power_cache.get(i)
-            metrics[f"{prefix}.power"] = metric_value(
-                cached_power if cached_power is not None else False
-            )
-
-            # Only read brightness/color-temp when we know the light is on.
-            if not cached_power:
-                continue
+            detected_power: bool | None = None
 
             try:
                 h = hid.device()
@@ -156,7 +153,8 @@ class LogitechLitraCollector(Collector):
                 h.set_nonblocking(True)
 
                 brightness = self._read_value(h, _CMD_BRIGHTNESS_GET)
-                if brightness is not None:
+                if brightness is not None and brightness > 0:
+                    detected_power = True
                     metrics[f"{prefix}.brightness_lumen"] = metric_value(
                         float(brightness), unit="lm"
                     )
@@ -167,13 +165,19 @@ class LogitechLitraCollector(Collector):
                         float(max(0, min(100, pct))), unit="%"
                     )
 
-                color_temp = self._read_value(h, _CMD_COLOR_TEMP_GET)
-                if color_temp is not None:
-                    metrics[f"{prefix}.color_temp"] = metric_value(float(color_temp), unit="K")
+                    color_temp = self._read_value(h, _CMD_COLOR_TEMP_GET)
+                    if color_temp is not None:
+                        metrics[f"{prefix}.color_temp"] = metric_value(float(color_temp), unit="K")
+                else:
+                    detected_power = False
 
                 h.close()
             except Exception:
                 logger.debug("Failed to read Litra %d", i, exc_info=True)
+
+            # Use detected state if available, else fall back to cache
+            is_on = detected_power if detected_power is not None else (cached_power or False)
+            metrics[f"{prefix}.power"] = metric_value(is_on)
 
         return metrics
 

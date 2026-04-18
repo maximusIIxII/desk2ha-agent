@@ -266,6 +266,7 @@ class MqttTransport(Transport):
         self._client: mqtt_client.Client | None = None
         self._connected = False
         self._discovery_published = False
+        self._discovered_keys: set[str] = set()
         self._loop: asyncio.AbstractEventLoop | None = None
 
     async def start(self) -> None:
@@ -377,11 +378,19 @@ class MqttTransport(Transport):
         if not self._connected or self._client is None:
             return
 
-        # Publish discovery on first state update (metrics now available)
-        if not self._discovery_published and metrics:
-            self._publish_ha_discovery(metrics)
-            self._publish_control_discovery(metrics)
+        # Publish discovery for any new metric keys not yet announced.
+        # On first update this covers everything; on subsequent updates it
+        # catches metrics from slow collectors (BT, USB) that arrive later.
+        new_keys = set(metrics.keys()) - self._discovered_keys
+        if new_keys:
+            self._publish_ha_discovery(metrics, only_keys=new_keys)
+            if not self._discovery_published:
+                self._publish_control_discovery(metrics)
             self._discovery_published = True
+            self._discovered_keys.update(metrics.keys())
+            # Re-publish availability — the device key may have changed
+            # since initial connect (platform collector sets real key).
+            self._client.publish(self._topic("availability"), payload="online", qos=1, retain=True)
 
         device_key = self._get_device_key()
         state_topic = self._topic("state")
@@ -425,7 +434,11 @@ class MqttTransport(Transport):
 
         return block
 
-    def _publish_ha_discovery(self, metrics: dict[str, Any]) -> None:
+    def _publish_ha_discovery(
+        self,
+        metrics: dict[str, Any],
+        only_keys: set[str] | None = None,
+    ) -> None:
         """Publish HA MQTT Discovery for metrics actually present in state."""
         if self._client is None:
             return
@@ -437,7 +450,14 @@ class MqttTransport(Transport):
         device_block = self._build_device_block()
         count = 0
 
+        exclude = self._config.discovery_exclude_prefixes
+
         for metric_key in metrics:
+            if only_keys is not None and metric_key not in only_keys:
+                continue
+            # Skip prefixes handled by the HTTP custom component (sub-devices)
+            if exclude and any(metric_key.startswith(p) for p in exclude):
+                continue
             # Skip display control keys (handled by _publish_control_discovery)
             suffix = metric_key.rsplit(".", 1)[-1]
             if suffix in _DISPLAY_CONTROL_KEYS:
@@ -669,6 +689,7 @@ class MqttTransport(Transport):
                 "system.sleep",
                 "system.shutdown",
                 "system.hibernate",
+                "system.kvm_diagnose",
                 "remote.wake_on_lan",
             ):
                 if self._loop:
@@ -751,6 +772,10 @@ class MqttTransport(Transport):
                 await system_actions.shutdown_system(parameters.get("delay", 0))
             elif command == "system.hibernate":
                 await system_actions.hibernate_system()
+            elif command == "system.kvm_diagnose":
+                from desk2ha_agent.lifecycle.kvm_diagnose import kvm_diagnose
+
+                await kvm_diagnose()
         except Exception:
             logger.exception("Agent command %s failed", command)
 

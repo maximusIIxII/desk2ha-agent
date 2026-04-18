@@ -230,13 +230,63 @@ _PNPID_TO_MANUFACTURER: dict[str, str] = {
 
 
 def _get_active_monitor_instance_ids() -> set[str]:
-    """Return currently active monitor device instance IDs via SetupAPI."""
+    """Return currently active (connected) monitor PNP device IDs.
+
+    Primary: WMI ``Win32_DesktopMonitor`` — works under LocalSystem and
+    user sessions.  Returns PNPDeviceID strings (e.g.
+    ``DISPLAY\\DEL439E\\4&247D66C&0&UID24645``).
+
+    Fallback: SetupAPI ``DIGCF_PRESENT`` + ``CM_Get_DevNode_Status``
+    ``DN_STARTED`` check.  SetupAPI can return 0 results under some
+    sessions, so WMI is preferred.
+    """
+    ids = _get_active_monitors_wmi()
+    if ids:
+        return ids
+    return _get_active_monitors_setupapi()
+
+
+def _get_active_monitors_wmi() -> set[str]:
+    """Get active monitor PNP device IDs via WMI.
+
+    Uses ``Win32_PnPEntity`` filtered by ``PNPClass='Monitor'`` which
+    correctly includes Thunderbolt/USB-C monitors and excludes
+    disconnected ones.  Works under both user sessions and LocalSystem.
+    """
+    try:
+        import pythoncom
+        import wmi
+
+        # Ensure COM is initialized — required when called from
+        # asyncio.to_thread() worker threads where COM isn't set up.
+        pythoncom.CoInitialize()
+        try:
+            c = wmi.WMI()
+            active: set[str] = set()
+            for p in c.Win32_PnPEntity(PNPClass="Monitor"):
+                pnp_id = p.PNPDeviceID
+                if pnp_id:
+                    active.add(pnp_id.upper())
+            if active:
+                logger.debug("WMI found %d active monitor(s): %s", len(active), active)
+            return active
+        finally:
+            pythoncom.CoUninitialize()
+    except Exception:
+        logger.debug("WMI monitor query failed", exc_info=True)
+        return set()
+
+
+def _get_active_monitors_setupapi() -> set[str]:
+    """Get active monitor instance IDs via SetupAPI (fallback)."""
     try:
         import ctypes
         from ctypes import wintypes
 
         setupapi = ctypes.windll.SetupAPI  # type: ignore[attr-defined]
+        cfgmgr = ctypes.windll.CfgMgr32  # type: ignore[attr-defined]
         DIGCF_PRESENT = 0x02
+        DN_STARTED = 0x00000008
 
         class GUID(ctypes.Structure):
             _fields_ = [
@@ -275,6 +325,15 @@ def _get_active_monitor_instance_ids() -> set[str]:
             if not setupapi.SetupDiEnumDeviceInfo(hdevinfo, idx, ctypes.byref(devinfo)):
                 break
             idx += 1
+
+            status = wintypes.DWORD(0)
+            problem = wintypes.DWORD(0)
+            cr = cfgmgr.CM_Get_DevNode_Status(
+                ctypes.byref(status), ctypes.byref(problem), devinfo.DevInst, 0
+            )
+            if cr != 0 or not (status.value & DN_STARTED):
+                continue
+
             buf = ctypes.create_unicode_buffer(512)
             if setupapi.SetupDiGetDeviceInstanceIdW(
                 hdevinfo, ctypes.byref(devinfo), buf, 512, None
@@ -297,6 +356,12 @@ def _read_monitor_identities_registry() -> list[dict[str, str]]:
     import winreg
 
     active_ids = _get_active_monitor_instance_ids()
+    if not active_ids:
+        # If we can't determine which monitors are active, return empty
+        # rather than including ghost entries from previously-connected
+        # monitors whose EDID persists in the registry.
+        logger.debug("No active monitor IDs — skipping registry EDID scan")
+        return []
     result: list[dict[str, str]] = []
     seen_models: set[str] = set()
     base = r"SYSTEM\CurrentControlSet\Enum\DISPLAY"
@@ -331,7 +396,7 @@ def _read_monitor_identities_registry() -> list[dict[str, str]]:
                     break
 
                 instance_id = f"DISPLAY\\{monitor_id}\\{instance}".upper()
-                if active_ids and instance_id not in active_ids:
+                if instance_id not in active_ids:
                     continue
 
                 edid_path = f"{monitor_path}\\{instance}\\Device Parameters"
@@ -387,19 +452,65 @@ class DDCCICollector(Collector):
 
     def __init__(self) -> None:
         self._monitor_ids: list[dict[str, str]] | None = None
+        self._use_helper: bool = False
+        self._helper_client: Any = None
 
     async def probe(self) -> bool:
-        """Check if monitorcontrol is importable and any DDC/CI monitor exists."""
+        """Check if monitorcontrol is importable and any monitor exists.
+
+        Three modes of operation:
+        - **Direct DDC/CI** — monitors reachable via monitorcontrol
+        - **Via helper** — helper process has desktop session and DDC/CI access
+        - **Registry fallback** — monitors exist but DDC/CI inaccessible
+        """
+        # Try DDC/CI directly first
+        has_monitorcontrol = False
         try:
             import monitorcontrol  # noqa: F401
 
-            monitors = await asyncio.to_thread(monitorcontrol.get_monitors)
-            return len(monitors) > 0
+            has_monitorcontrol = True
         except ImportError:
-            return False
+            pass
+
+        if has_monitorcontrol:
+            try:
+                monitors = await asyncio.to_thread(monitorcontrol.get_monitors)
+                if len(monitors) > 0:
+                    logger.info("DDC/CI: direct access (%d monitors)", len(monitors))
+                    return True
+            except Exception:
+                logger.debug("DDC/CI probe: get_monitors() failed", exc_info=True)
+
+        # Try helper (runs under user session with desktop access)
+        try:
+            from desk2ha_agent.helper.client import HelperClient
+
+            self._helper_client = HelperClient()
+            if await self._helper_client.is_available():
+                metrics = await self._helper_client.get_metrics()
+                display_keys = [k for k in metrics if k.startswith("display.")]
+                if display_keys:
+                    self._use_helper = True
+                    logger.info("DDC/CI: using helper (%d display metrics)", len(display_keys))
+                    return True
+                logger.debug("DDC/CI: helper running but no display metrics")
         except Exception:
-            logger.debug("DDC/CI probe failed", exc_info=True)
-            return False
+            logger.debug("DDC/CI: helper probe failed", exc_info=True)
+
+        # Fall back to registry — monitors may be off or running as LocalSystem
+        if sys.platform == "win32":
+            try:
+                registry_ids = await asyncio.to_thread(_read_monitor_identities_registry)
+                if registry_ids:
+                    logger.info(
+                        "DDC/CI probe: no live monitors, but %d in registry",
+                        len(registry_ids),
+                    )
+                    return True
+            except Exception:
+                logger.debug("DDC/CI probe: registry check failed", exc_info=True)
+
+        return False
 
     async def setup(self) -> None:
         """Read monitor identities (Windows only)."""
@@ -415,12 +526,22 @@ class DDCCICollector(Collector):
                 logger.debug("Failed to read monitor identities", exc_info=True)
 
     async def collect(self) -> dict[str, Any]:
-        """Collect DDC/CI metrics in a background thread."""
+        """Collect DDC/CI metrics (directly or via helper)."""
+        if self._use_helper:
+            return await self._collect_via_helper()
         try:
             return await asyncio.to_thread(self._collect_sync)
         except Exception:
             logger.debug("DDC/CI collection failed", exc_info=True)
             return {}
+
+    async def _collect_via_helper(self) -> dict[str, Any]:
+        """Fetch DDC/CI display metrics from the elevated helper."""
+        if self._helper_client is None:
+            return {}
+        all_metrics = await self._helper_client.get_metrics()
+        # Filter to display-related keys only (avoid duplicating dell_dcm data)
+        return {k: v for k, v in all_metrics.items() if k.startswith("display.")}
 
     def _collect_sync(self) -> dict[str, Any]:
         """Synchronous DDC/CI collection."""
@@ -432,13 +553,17 @@ class DDCCICollector(Collector):
             monitors = get_monitors()
         except Exception:
             logger.debug("DDC/CI monitor enumeration failed", exc_info=True)
-            return {}
+            monitors = []
+
+        # Track which registry monitors matched a DDC/CI monitor
+        matched_registry_indices: set[int] = set()
 
         for i, monitor in enumerate(monitors):
             prefix = f"display.{i}"
 
             # Emit model/manufacturer from cached registry data (Windows)
             if self._monitor_ids and i < len(self._monitor_ids):
+                matched_registry_indices.add(i)
                 mid = self._monitor_ids[i]
                 if mid.get("model"):
                     metrics[f"{prefix}.model"] = metric_value(mid["model"])
@@ -621,16 +746,45 @@ class DDCCICollector(Collector):
                         pass
 
             except Exception:
-                logger.debug("Failed to read DDC/CI from monitor %d", i, exc_info=True)
+                # Monitor offline (powered off, disconnected, or DDC/CI unavailable).
+                # Emit power_state=off so HA entities degrade gracefully instead of
+                # becoming "unavailable".
+                logger.debug("DDC/CI communication failed for monitor %d — marking offline", i)
+                metrics[f"{prefix}.power_state"] = metric_value("off")
+
+        # Emit entries for registry-known monitors not found via DDC/CI.
+        # These monitors passed the DN_STARTED devnode check (physically
+        # connected) but DDC/CI can't reach them — typically because we're
+        # running as LocalSystem with no desktop session.  Report power_state
+        # as "on" since the devnode is started (connected and active).
+        if self._monitor_ids:
+            for j, mid in enumerate(self._monitor_ids):
+                if j in matched_registry_indices:
+                    continue
+                idx = len(monitors) + (j - len(matched_registry_indices))
+                prefix = f"display.{idx}"
+                if mid.get("model"):
+                    metrics[f"{prefix}.model"] = metric_value(mid["model"])
+                if mid.get("manufacturer"):
+                    metrics[f"{prefix}.manufacturer"] = metric_value(mid["manufacturer"])
+                metrics[f"{prefix}.power_state"] = metric_value("on")
+                logger.debug(
+                    "Monitor '%s' connected (devnode started, DDC/CI unavailable)",
+                    mid.get("model", "unknown"),
+                )
 
         return metrics
 
     async def execute_command(
         self, command: str, target: str, parameters: dict[str, Any]
     ) -> dict[str, Any]:
-        """Execute display control commands."""
+        """Execute display control commands (directly or via helper)."""
         if not command.startswith("display."):
             raise NotImplementedError
+
+        # Proxy through helper if DDC/CI is not available locally
+        if self._use_helper and self._helper_client is not None:
+            return await self._helper_client.send_command(command, target, parameters)
 
         from monitorcontrol import get_monitors
 
@@ -815,6 +969,8 @@ class DDCCICollector(Collector):
 
     async def teardown(self) -> None:
         self._monitor_ids = None
+        self._helper_client = None
+        self._use_helper = False
 
 
 COLLECTOR_CLASS = DDCCICollector
