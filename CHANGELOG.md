@@ -3,6 +3,12 @@
 All notable changes to the Desk2HA Agent will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji categories.
 
+## [Unreleased]
+
+### 🔧 Improvements
+- **Deploy-first release workflow**: `scripts/release.sh` now delegates to the shared `release-orchestrator.py`. The orchestrator runs staging deploy + 21-section live verification + baseline-diff BEFORE tagging/pushing, so a broken release can no longer ship with a green tag. Legacy monolithic release.sh is kept as a thin wrapper with a deprecation notice.
+- **Split preflight and publish**: New `scripts/predeploy.sh` (lint/tests/security/changelog) and `scripts/publish.sh` (version bump + tag + push) decouple verification from release so the orchestrator can insert deploy+verify between them.
+
 ## [1.2.0] - 2026-04-13
 
 ### ✨ New features
