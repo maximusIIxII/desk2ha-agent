@@ -589,9 +589,9 @@ def auto_fix(
                     f"({confidence:.0%}), manual fix needed: {fix}"
                 )
                 continue
-            if (
-                confidence < CONFIDENCE_MEDIUM
-                and r["check"] not in ("service_running", "version_match")
+            if confidence < CONFIDENCE_MEDIUM and r["check"] not in (
+                "service_running",
+                "version_match",
             ):
                 actions.append(
                     f"[SKIP] {issue}: confidence {confidence:.0%}, "
@@ -621,16 +621,12 @@ def auto_fix(
         elif r.get("issue") == "running_stale":
             if severity in ("critical", "high"):
                 print("  [FIX] Aggressive restart: stopping, killing orphans, starting...")
-                subprocess.run(
-                    ["nssm", "stop", SERVICE_NAME], capture_output=True, timeout=30
-                )
+                subprocess.run(["nssm", "stop", SERVICE_NAME], capture_output=True, timeout=30)
                 _kill_desk2ha_processes()
                 time.sleep(3)
             else:
                 print("  [FIX] Restarting service (stale version)...")
-                subprocess.run(
-                    ["nssm", "stop", SERVICE_NAME], capture_output=True, timeout=30
-                )
+                subprocess.run(["nssm", "stop", SERVICE_NAME], capture_output=True, timeout=30)
                 time.sleep(3)
             subprocess.run(["nssm", "start", SERVICE_NAME], capture_output=True, timeout=30)
             time.sleep(5)
@@ -644,9 +640,7 @@ def auto_fix(
             python_exe = get_nssm_python()
             if python_exe:
                 print("  [FIX] Reinstalling package...")
-                subprocess.run(
-                    ["nssm", "stop", SERVICE_NAME], capture_output=True, timeout=30
-                )
+                subprocess.run(["nssm", "stop", SERVICE_NAME], capture_output=True, timeout=30)
                 time.sleep(3)
 
                 pip_args = [python_exe, "-m", "pip", "install", "--no-cache-dir"]
@@ -657,9 +651,7 @@ def auto_fix(
                 pip_args.extend(["-e", str(REPO_ROOT)])
 
                 subprocess.run(pip_args, capture_output=True, timeout=120)
-                subprocess.run(
-                    ["nssm", "start", SERVICE_NAME], capture_output=True, timeout=30
-                )
+                subprocess.run(["nssm", "start", SERVICE_NAME], capture_output=True, timeout=30)
                 time.sleep(5)
                 actions.append(
                     f"Reinstalled and restarted ({r.get('installed')} -> {r.get('source')}) "
@@ -1000,9 +992,7 @@ def print_results(results: list[dict]) -> int:
 
 def _print_time_to_detect_stats(health_history: list[dict]) -> None:
     """Print time-to-detect statistics from health history."""
-    ttd_entries = [
-        e for e in health_history if e.get("time_to_detect_seconds") is not None
-    ]
+    ttd_entries = [e for e in health_history if e.get("time_to_detect_seconds") is not None]
     if not ttd_entries:
         return
 
@@ -1043,9 +1033,7 @@ def main() -> int:
             results = run_checks(config)
             fails = print_results(results)
             if fails > 0 and args.auto_fix:
-                actions = auto_fix(
-                    results, dry_run=args.dry_run, use_confidence=use_confidence
-                )
+                actions = auto_fix(results, dry_run=args.dry_run, use_confidence=use_confidence)
                 for a in actions:
                     print(f"  -> {a}")
             time.sleep(args.interval)
@@ -1059,9 +1047,7 @@ def main() -> int:
 
         if fails > 0 and args.auto_fix:
             print("  ATTEMPTING AUTO-FIX (confidence-based)...")
-            actions = auto_fix(
-                results, dry_run=args.dry_run, use_confidence=use_confidence
-            )
+            actions = auto_fix(results, dry_run=args.dry_run, use_confidence=use_confidence)
             for a in actions:
                 print(f"  -> {a}")
 
