@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji catego
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-04-18
+
 ### 🔒 Security
 - **aiohttp bumped to >=3.13.4**: closes 20+ published CVEs affecting aiohttp 3.9 (HTTP request smuggling, response-splitting via `\r` in reason phrase, chunked-trailer DoS, cookie/proxy-auth leak on cross-origin redirect, static-file UNC SSRF on Windows, multipart size-enforcement bypass, and others). Surfaced by the new OSV.dev check in `security-scan.py --deep`; previously hidden by the old hardcoded CVE list.
 
