@@ -44,6 +44,19 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Log directory (default: current directory)",
     )
     parser.add_argument(
+        "--secret",
+        "-s",
+        default=None,
+        help="Bearer token secret (alternative to DESK2HA_HELPER_SECRET env var)",
+    )
+    parser.add_argument(
+        "-c",
+        "--config",
+        type=Path,
+        default=None,
+        help="Config TOML file to read [helper].secret from",
+    )
+    parser.add_argument(
         "--version",
         "-V",
         action="version",
@@ -88,11 +101,15 @@ def _check_admin() -> bool:
         return os.geteuid() == 0
 
 
-async def _run(port: int, bind: str) -> None:
+async def _run(port: int, bind: str, secret: str | None = None) -> None:
     if not _check_admin():
         logger.warning(
             "Helper is NOT running with admin privileges — elevated collectors may not work"
         )
+
+    # Set secret from CLI arg if provided
+    if secret:
+        os.environ[HELPER_SECRET_ENV] = secret
 
     # Generate a shared secret if not already set (e.g. by a parent process)
     if not os.environ.get(HELPER_SECRET_ENV):
@@ -128,12 +145,37 @@ async def _run(port: int, bind: str) -> None:
     await helper.stop()
 
 
+def _read_secret_from_config(config_path: Path) -> str | None:
+    """Read helper secret from config TOML file."""
+    try:
+        import tomllib
+    except ImportError:
+        try:
+            import tomli as tomllib  # type: ignore[no-redef]
+        except ImportError:
+            return None
+    try:
+        with open(config_path, "rb") as f:
+            cfg = tomllib.load(f)
+        return cfg.get("helper", {}).get("secret")
+    except Exception:
+        return None
+
+
 def main(argv: list[str] | None = None) -> None:
     args = _parse_args(argv)
     _setup_logging(args.log_dir)
+
+    # Resolve secret: CLI --secret > --config file > env var
+    secret = args.secret
+    if not secret and args.config:
+        secret = _read_secret_from_config(args.config)
+        if secret:
+            logger.info("Read helper secret from %s", args.config)
+
     logger.info("Desk2HA Helper %s starting on %s:%d", __version__, args.bind, args.port)
     with contextlib.suppress(KeyboardInterrupt):
-        asyncio.run(_run(args.port, args.bind))
+        asyncio.run(_run(args.port, args.bind, secret=secret))
 
 
 if __name__ == "__main__":

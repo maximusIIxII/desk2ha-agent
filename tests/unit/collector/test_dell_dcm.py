@@ -152,3 +152,74 @@ def test_collect_power_battery_source():
     c._collect_power(mock_conn, metrics, 0.0)
 
     assert metrics["power.source"]["value"] == "battery"
+
+
+# ---------- Dock telemetry (FK-16) ----------
+
+
+def test_collect_dock():
+    """Dock collection should emit dock.0.* metrics from WMI objects."""
+    c = DellDcmCollector()
+    mock_conn = MagicMock()
+
+    dock = MagicMock()
+    dock.Model = "WD22TB4"
+    dock.FirmwareVersion = "1.0.15.1"
+    dock.SerialNumber = "ABCD1234"
+    dock.ConnectionType = "Thunderbolt"
+
+    mock_conn.query.return_value = [dock]
+
+    metrics: dict = {}
+    c._collect_dock(mock_conn, metrics, 0.0)
+
+    assert metrics["dock.0.model"]["value"] == "WD22TB4"
+    assert metrics["dock.0.firmware"]["value"] == "1.0.15.1"
+    assert metrics["dock.0.serial"]["value"] == "ABCD1234"
+    assert metrics["dock.0.connection_type"]["value"] == "Thunderbolt"
+    assert metrics["dock.0.connected"]["value"] is True
+
+
+def test_collect_dock_no_docks():
+    """Empty dock query should not crash."""
+    c = DellDcmCollector()
+    mock_conn = MagicMock()
+    mock_conn.query.return_value = []
+
+    metrics: dict = {}
+    c._collect_dock(mock_conn, metrics, 0.0)
+
+    assert not any(k.startswith("dock.") for k in metrics)
+
+
+def test_collect_dock_wmi_exception():
+    """WMI exception in dock query should not propagate."""
+    c = DellDcmCollector()
+    mock_conn = MagicMock()
+    mock_conn.query.side_effect = Exception("WMI not available")
+
+    metrics: dict = {}
+    c._collect_dock(mock_conn, metrics, 0.0)
+    assert not any(k.startswith("dock.") for k in metrics)
+
+
+def test_collect_dock_partial_attributes():
+    """Dock with missing attributes should still emit available ones."""
+    c = DellDcmCollector()
+    mock_conn = MagicMock()
+
+    dock = MagicMock()
+    dock.Model = "WD19TBS"
+    dock.FirmwareVersion = None
+    dock.SerialNumber = None
+    dock.ConnectionType = None
+    dock.ElementName = None
+
+    mock_conn.query.return_value = [dock]
+
+    metrics: dict = {}
+    c._collect_dock(mock_conn, metrics, 0.0)
+
+    assert metrics["dock.0.model"]["value"] == "WD19TBS"
+    assert metrics["dock.0.connected"]["value"] is True
+    assert "dock.0.firmware" not in metrics

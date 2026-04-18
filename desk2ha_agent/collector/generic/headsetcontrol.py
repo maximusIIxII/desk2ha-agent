@@ -160,6 +160,21 @@ class HeadsetControlCollector(Collector):
             if chatmix is not None and isinstance(chatmix, int | float):
                 metrics[f"{prefix}.chatmix"] = metric_value(int(chatmix))
 
+            # Equalizer preset if available
+            eq_preset = caps.get("equalizer_preset")
+            if eq_preset is not None:
+                metrics[f"{prefix}.equalizer_preset"] = metric_value(str(eq_preset))
+
+            # Inactive timeout if available
+            inactive = caps.get("inactive_time")
+            if inactive is not None and isinstance(inactive, int | float):
+                metrics[f"{prefix}.inactive_timeout"] = metric_value(int(inactive))
+
+            # Voice prompts
+            voice_prompts = caps.get("voice_prompts")
+            if voice_prompts is not None:
+                metrics[f"{prefix}.voice_prompts"] = metric_value(bool(voice_prompts))
+
             # Firmware if available
             firmware = dev.get("firmware_version")
             if firmware:
@@ -191,6 +206,23 @@ class HeadsetControlCollector(Collector):
             if not 0 <= value <= 128:
                 raise ValueError(f"Chatmix must be 0-128, got {value}")
             await self._run_cli("-m", str(value))
+            return {"status": "completed"}
+
+        if command == "headset.set_inactive_timeout":
+            value = int(parameters["value"])
+            if not 0 <= value <= 90:
+                raise ValueError(f"Inactive timeout must be 0-90, got {value}")
+            await self._run_cli("-i", str(value))
+            return {"status": "completed"}
+
+        if command == "headset.set_equalizer_preset":
+            preset = str(parameters.get("preset", parameters.get("value", "0")))
+            await self._run_cli("-p", preset)
+            return {"status": "completed"}
+
+        if command == "headset.set_voice_prompts":
+            on = parameters.get("value", parameters.get("enabled", True))
+            await self._run_cli("--voice-prompt", "1" if on else "0")
             return {"status": "completed"}
 
         raise NotImplementedError(f"Unknown command: {command}")

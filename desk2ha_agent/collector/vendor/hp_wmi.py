@@ -123,6 +123,34 @@ class HpWmiCollector(Collector):
             except Exception:
                 logger.debug("HP thermal profile query failed", exc_info=True)
 
+            # Battery health via standard WMI
+            try:
+                std = wmi.WMI()
+                for bat in std.query(
+                    "SELECT DesignCapacity,FullChargeCapacity,CycleCount FROM Win32_Battery"
+                ):
+                    design = getattr(bat, "DesignCapacity", None)
+                    full = getattr(bat, "FullChargeCapacity", None)
+                    cycles = getattr(bat, "CycleCount", None)
+                    if design and full and int(design) > 0:
+                        pct = round(float(full) / float(design) * 100, 1)
+                        metrics["battery.health_percent"] = metric_value(pct, unit="%")
+                    if cycles is not None:
+                        metrics["battery.cycle_count"] = metric_value(float(cycles))
+            except Exception:
+                logger.debug("HP battery health query failed", exc_info=True)
+
+            # BIOS version
+            try:
+                std = wmi.WMI()
+                for bios in std.query("SELECT SMBIOSBIOSVersion FROM Win32_BIOS"):
+                    ver = getattr(bios, "SMBIOSBIOSVersion", None)
+                    if ver:
+                        metrics["system.bios_version"] = metric_value(str(ver))
+                        break
+            except Exception:
+                logger.debug("HP BIOS version query failed", exc_info=True)
+
             return metrics
         except Exception:
             logger.exception("HP WMI collection failed")

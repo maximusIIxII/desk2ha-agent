@@ -151,6 +151,24 @@ class LenovoWmiCollector(Collector):
             except Exception:
                 logger.debug("Lenovo battery mode query failed", exc_info=True)
 
+            # Battery health + cycle count via Lenovo_BatteryInformation
+            try:
+                batteries = conn.query("SELECT * FROM Lenovo_BatteryInformation")
+                for bat in batteries:
+                    health = getattr(bat, "RemainingCapacity", None)
+                    design = getattr(bat, "DesignCapacity", None)
+                    cycles = getattr(bat, "CycleCount", None)
+                    if health is not None and design and int(design) > 0:
+                        pct = round(float(health) / float(design) * 100, 1)
+                        metrics["battery.health_percent"] = metric_value(pct, unit="%")
+                    if cycles is not None:
+                        metrics["battery.cycle_count"] = metric_value(float(cycles))
+            except Exception:
+                logger.debug("Lenovo battery health query failed", exc_info=True)
+
+            # BIOS version + Secure Boot from standard WMI
+            self._collect_system_info(metrics)
+
             return metrics
         except Exception:
             logger.exception("Lenovo WMI collection failed")
@@ -242,6 +260,42 @@ class LenovoWmiCollector(Collector):
                     pass
 
         return metrics
+
+    @staticmethod
+    def _collect_system_info(metrics: dict[str, Any]) -> None:
+        """Collect BIOS version and Secure Boot status via standard WMI."""
+        try:
+            import wmi as wmi_mod
+
+            std = wmi_mod.WMI()
+
+            # BIOS version
+            for bios in std.query("SELECT SMBIOSBIOSVersion FROM Win32_BIOS"):
+                ver = getattr(bios, "SMBIOSBIOSVersion", None)
+                if ver:
+                    metrics["system.bios_version"] = metric_value(str(ver))
+                    break
+
+            # Secure Boot (requires Win8+)
+            try:
+                import subprocess
+
+                result = subprocess.run(
+                    [
+                        "powershell",
+                        "-Command",
+                        "Confirm-SecureBootUEFI",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                val = result.stdout.strip().lower()
+                metrics["system.secure_boot"] = metric_value(val == "true")
+            except Exception:
+                pass
+        except Exception:
+            logger.debug("System info query failed", exc_info=True)
 
     async def execute_command(
         self, command: str, target: str, parameters: dict[str, Any]

@@ -25,6 +25,10 @@ KNOWN_PERIPHERALS: dict[str, PeripheralSpec] = {
     "413c:c015": PeripheralSpec("Dell", "Webcam WB7022", "webcam"),
     "413c:b0a6": PeripheralSpec("Dell", "Webcam WB7022", "webcam"),
     "413c:d001": PeripheralSpec("Dell", "KM7321W Keyboard", "keyboard"),
+    # Dell Thunderbolt Docks
+    "413c:b06e": PeripheralSpec("Dell", "WD22TB4 Thunderbolt Dock", "dock"),
+    "413c:b06f": PeripheralSpec("Dell", "WD19TBS Thunderbolt Dock", "dock"),
+    "413c:b070": PeripheralSpec("Dell", "WD19TB Thunderbolt Dock", "dock"),
     # VIA Labs USB hub chip (inside Dell DA305 and other docks)
     "2109:8884": PeripheralSpec("Dell", "DA305 USB-C Hub", "dock"),
     "2109:2822": PeripheralSpec("Dell", "DA305 USB-C Hub", "dock"),
@@ -62,6 +66,7 @@ VID_MANUFACTURERS: dict[str, str] = {
     "17ef": "Lenovo",
     "03f0": "HP",
     "0bda": "Realtek",
+    "0c45": "Sonix",
     "2109": "VIA Labs",
 }
 

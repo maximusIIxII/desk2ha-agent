@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import platform
+import re
 import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -83,6 +84,7 @@ class HttpTransport(Transport):
         app.router.add_get("/v1/health", self._handle_health)
         app.router.add_get("/v1/info", self._handle_info)
         app.router.add_get("/v1/metrics", self._handle_metrics)
+        app.router.add_get("/v1/metrics/prometheus", self._handle_metrics_prometheus)
         app.router.add_get("/v1/config", self._handle_config)
         app.router.add_get("/v1/image/{device_key}", self._handle_image)
         app.router.add_get("/v1/commands", self._handle_commands_list)
@@ -305,6 +307,61 @@ class HttpTransport(Transport):
 
         return web.json_response(resp)
 
+    async def _handle_metrics_prometheus(self, _request: web.Request) -> web.Response:
+        """GET /v1/metrics/prometheus -- OpenMetrics text exposition."""
+        all_metrics = await self._state.snapshot()
+        device_key = self._get_device_key()
+        hostname = platform.node()
+        uptime = int(time.monotonic() - self._start_time)
+
+        lines: list[str] = []
+
+        # Agent metadata
+        lines.append("# HELP desk2ha_agent_info Agent metadata")
+        lines.append("# TYPE desk2ha_agent_info gauge")
+        lines.append(
+            f'desk2ha_agent_info{{version="{__version__}"'
+            f',device_key="{device_key}",hostname="{hostname}"}} 1'
+        )
+        lines.append("# HELP desk2ha_agent_uptime_seconds Agent uptime")
+        lines.append("# TYPE desk2ha_agent_uptime_seconds counter")
+        lines.append(f"desk2ha_agent_uptime_seconds {uptime}")
+
+        # Convert all state metrics
+        for key, raw_value in sorted(all_metrics.items()):
+            value, unit = _extract_metric_value(raw_value)
+            if value is None:
+                continue
+
+            prom_name = _to_prometheus_name(key, unit)
+
+            # Determine labels for nested keys (display.0.X, peripheral.Y.Z)
+            labels = _extract_labels(key, device_key, hostname)
+
+            if isinstance(value, bool):
+                num_value = "1" if value else "0"
+            elif isinstance(value, (int, float)):
+                num_value = str(value)
+            elif isinstance(value, str):
+                # String values become info-style labels
+                labels += f',value="{_escape_label_value(value)}"'
+                num_value = "1"
+            else:
+                continue
+
+            label_str = f"{{{labels}}}" if labels else ""
+            lines.append(f"# TYPE {prom_name} gauge")
+            lines.append(f"{prom_name}{label_str} {num_value}")
+
+        lines.append("# EOF")
+        body = "\n".join(lines) + "\n"
+        return web.Response(
+            text=body,
+            content_type="text/plain",
+            charset="utf-8",
+            headers={"X-Content-Type-Options": "nosniff"},
+        )
+
     async def _handle_config(self, _request: web.Request) -> web.Response:
         """GET /v1/config -- return redacted config summary."""
         resp = {
@@ -459,6 +516,18 @@ class HttpTransport(Transport):
             result = await restart_service()
             return web.json_response(result)
 
+        if command == "system.usb_reset":
+            from desk2ha_agent.lifecycle.usb_watchdog import usb_reset
+
+            result = await usb_reset()
+            return web.json_response(result)
+
+        if command == "system.kvm_diagnose":
+            from desk2ha_agent.lifecycle.kvm_diagnose import kvm_diagnose
+
+            data = await kvm_diagnose()
+            return web.json_response({"status": "completed", "diagnostics": data})
+
         if command in (
             "system.lock",
             "system.sleep",
@@ -591,3 +660,85 @@ def _serialize_nested(data: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
             entry[mk] = mv
         result.append(entry)
     return result
+
+
+# ---------------------------------------------------------------------------
+# Prometheus text exposition helpers
+# ---------------------------------------------------------------------------
+
+_UNIT_SUFFIX_MAP: dict[str, str] = {
+    "°C": "_celsius",
+    "°F": "_fahrenheit",
+    "%": "_percent",
+    "RPM": "_rpm",
+    "rpm": "_rpm",
+    "W": "_watts",
+    "V": "_volts",
+    "A": "_amps",
+    "mAh": "_milliamp_hours",
+    "Wh": "_watt_hours",
+    "MHz": "_megahertz",
+    "MB": "_megabytes",
+    "GB": "_gigabytes",
+    "Mbps": "_mbps",
+    "dB": "_decibels",
+    "ms": "_milliseconds",
+    "s": "_seconds",
+    "lux": "_lux",
+    "K": "_kelvin",
+}
+
+_PROM_NAME_RE = re.compile(r"[^a-zA-Z0-9_]")
+
+
+def _to_prometheus_name(key: str, unit: str | None) -> str:
+    """Convert a metric key like ``cpu.temperature`` to ``desk2ha_cpu_temperature_celsius``."""
+    name = "desk2ha_" + _PROM_NAME_RE.sub("_", key)
+    # Collapse consecutive underscores
+    while "__" in name:
+        name = name.replace("__", "_")
+    name = name.strip("_")
+    if unit and unit in _UNIT_SUFFIX_MAP:
+        suffix = _UNIT_SUFFIX_MAP[unit]
+        if not name.endswith(suffix):
+            name += suffix
+    return name
+
+
+def _extract_metric_value(
+    raw: Any,
+) -> tuple[int | float | str | bool | None, str | None]:
+    """Extract numeric/string value and unit from a state entry."""
+    if isinstance(raw, dict):
+        val = raw.get("value")
+        unit = raw.get("unit")
+        return val, unit
+    # Raw scalar stored directly
+    if isinstance(raw, (int, float, str, bool)):
+        return raw, None
+    return None, None
+
+
+def _extract_labels(key: str, device_key: str, hostname: str) -> str:
+    """Build Prometheus label string for nested metric keys."""
+    labels = f'device_key="{device_key}",hostname="{hostname}"'
+    parts = key.split(".")
+
+    # display.0.brightness → device="display_0"
+    # peripheral.usb_046d_c900.battery → device="peripheral_usb_046d_c900"
+    # audio.speakers.volume → device="audio_speakers"
+    if len(parts) >= 3 and parts[0] in (
+        "display",
+        "peripheral",
+        "audio",
+        "webcam",
+    ):
+        device_id = f"{parts[0]}_{parts[1]}"
+        labels += f',device="{device_id}"'
+
+    return labels
+
+
+def _escape_label_value(value: str) -> str:
+    """Escape a string for use as a Prometheus label value."""
+    return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")

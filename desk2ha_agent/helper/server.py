@@ -130,6 +130,7 @@ class ElevatedHelper:
         app = web.Application(middlewares=middlewares)
         app.router.add_get("/health", self._handle_health)
         app.router.add_get("/metrics", self._handle_metrics)
+        app.router.add_post("/command", self._handle_command)
         return app
 
     async def _handle_health(self, _request: web.Request) -> web.Response:
@@ -144,6 +145,35 @@ class ElevatedHelper:
 
     async def _handle_metrics(self, _request: web.Request) -> web.Response:
         return web.json_response(self._metrics)
+
+    async def _handle_command(self, request: web.Request) -> web.Response:
+        """Forward a command to the appropriate collector."""
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"error": "invalid JSON"}, status=400)
+
+        command = body.get("command", "")
+        target = body.get("target", "")
+        parameters = body.get("parameters", {})
+
+        if not command:
+            return web.json_response({"error": "missing 'command' field"}, status=400)
+
+        # Find a collector that handles this command
+        for collector in self._collectors:
+            if not hasattr(collector, "execute_command"):
+                continue
+            try:
+                result = await collector.execute_command(command, target, parameters)
+                return web.json_response(result)
+            except NotImplementedError:
+                continue
+            except Exception as exc:
+                logger.warning("Command %s failed: %s", command, exc, exc_info=True)
+                return web.json_response({"error": str(exc)}, status=500)
+
+        return web.json_response({"error": f"no collector handles command: {command}"}, status=404)
 
     async def _collect_once(self) -> None:
         """Run all elevated collectors and merge metrics."""

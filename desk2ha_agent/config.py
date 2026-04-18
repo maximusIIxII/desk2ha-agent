@@ -44,6 +44,7 @@ class MqttConfig(BaseModel):
     base_topic: str = "desk2ha"
     tls: bool = False
     ha_discovery_prefix: str = "homeassistant"
+    discovery_exclude_prefixes: list[str] = []
 
     @model_validator(mode="after")
     def _resolve_password(self) -> MqttConfig:

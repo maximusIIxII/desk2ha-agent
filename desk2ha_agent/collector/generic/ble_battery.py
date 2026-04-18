@@ -1,8 +1,14 @@
-"""BLE GATT Battery Service collector."""
+"""BLE GATT Battery Service collector.
+
+macOS note: bleak returns CoreBluetooth UUIDs instead of MAC addresses.
+On macOS, global_id uses "bt-uuid:<UUID>" format and devices are matched
+by name + manufacturer for cross-host tracking.
+"""
 
 from __future__ import annotations
 
 import logging
+import sys
 from typing import Any, ClassVar
 
 from desk2ha_agent.collector.base import (
@@ -76,7 +82,7 @@ class BLEBatteryCollector(Collector):
             )
 
             for device in devices:
-                device_key = f"BLE-{device.address.replace(':', '')}"
+                device_key = _make_device_key(device.address)
                 name = device.name or "Unknown BLE Device"
                 prefix = f"peripheral.{device_key}"
 
@@ -91,9 +97,9 @@ class BLEBatteryCollector(Collector):
                             )
                             metrics[f"{prefix}.model"] = metric_value(name)
 
-                            # Multi-host tracking: BLE MAC is globally unique
-                            clean_addr = device.address.replace(":", "").replace("-", "").upper()
-                            metrics[f"{prefix}.global_id"] = metric_value(f"bt:{clean_addr}")
+                            # Multi-host tracking
+                            global_id = _make_global_id(device.address, name)
+                            metrics[f"{prefix}.global_id"] = metric_value(global_id)
                             if self.host_device_key:
                                 metrics[f"{prefix}.connected_host"] = metric_value(
                                     self.host_device_key
@@ -142,6 +148,33 @@ class BLEBatteryCollector(Collector):
 
     async def teardown(self) -> None:
         self._known_devices.clear()
+
+
+def _is_macos_uuid(address: str) -> bool:
+    """Check if address is a macOS CoreBluetooth UUID (not a MAC)."""
+    # macOS UUIDs are 36 chars like "12345678-1234-1234-1234-123456789ABC"
+    # MACs are like "AA:BB:CC:DD:EE:FF" or "AA-BB-CC-DD-EE-FF"
+    return len(address) == 36 and address.count("-") == 4
+
+
+def _make_device_key(address: str) -> str:
+    """Create a stable device key from BLE address or UUID."""
+    if _is_macos_uuid(address):
+        # Use last 12 chars of UUID for shorter key
+        return f"BLE-{address.replace('-', '')[-12:].upper()}"
+    return f"BLE-{address.replace(':', '').replace('-', '').upper()}"
+
+
+def _make_global_id(address: str, name: str) -> str:
+    """Create a global_id for multi-host tracking.
+
+    On Linux/Windows: ``bt:<MAC>`` (globally unique)
+    On macOS: ``bt-uuid:<UUID>`` (device-local, but stable per Mac)
+    """
+    if sys.platform == "darwin" and _is_macos_uuid(address):
+        return f"bt-uuid:{address.upper()}"
+    clean = address.replace(":", "").replace("-", "").upper()
+    return f"bt:{clean}"
 
 
 COLLECTOR_CLASS = BLEBatteryCollector
