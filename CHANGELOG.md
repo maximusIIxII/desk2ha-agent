@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji catego
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-04-18
+
 ### ✨ New features
 - **Dell Webcam Extension Units (FK-14)**: HDR, AI Auto-Framing, Field of View, Noise Reduction, Digital Zoom for Dell WB7022/WB5023 via HID Feature Reports (usage page 0xFF83)
 - **Dell Peripheral Controls (FK-15)**: Keyboard backlight level, mouse DPI, battery level, active slot for Dell KB900/MS900 via Secure Link Receivers (413c:2119/2141)
