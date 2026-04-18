@@ -5,6 +5,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji catego
 
 ## [Unreleased]
 
+### 🔧 Improvements
+- **Release-readiness CI workflow**: new `.github/workflows/release-readiness.yml` runs `scripts/predeploy.sh` on every PR + push to main — the same gate the orchestrator enforces at release time. Fixes the cycle where CHANGELOG-empty / `tools/` format drift / security findings only surface mid-release (happened during the v1.4.0 run).
+- **`predeploy.sh` fails loud**: missing `ruff`/`pytest` now exits non-zero instead of printing a warn and continuing. Silent skips let `tools/service-health.py` format drift through to verify-time on v1.4.0.
+
 ## [1.4.0] - 2026-04-18
 
 ### ✨ New features
