@@ -5,6 +5,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji catego
 
 ## [Unreleased]
 
+### 🔒 Security
+- **aiohttp bumped to >=3.13.4**: closes 20+ published CVEs affecting aiohttp 3.9 (HTTP request smuggling, response-splitting via `\r` in reason phrase, chunked-trailer DoS, cookie/proxy-auth leak on cross-origin redirect, static-file UNC SSRF on Windows, multipart size-enforcement bypass, and others). Surfaced by the new OSV.dev check in `security-scan.py --deep`; previously hidden by the old hardcoded CVE list.
+
 ### 🔧 Improvements
 - **Deploy-first release workflow**: `scripts/release.sh` now delegates to the shared `release-orchestrator.py`. The orchestrator runs staging deploy + 21-section live verification + baseline-diff BEFORE tagging/pushing, so a broken release can no longer ship with a green tag. Legacy monolithic release.sh is kept as a thin wrapper with a deprecation notice.
 - **Split preflight and publish**: New `scripts/predeploy.sh` (lint/tests/security/changelog) and `scripts/publish.sh` (version bump + tag + push) decouple verification from release so the orchestrator can insert deploy+verify between them.
