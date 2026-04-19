@@ -25,6 +25,50 @@ from desk2ha_agent.collector.base import (
 logger = logging.getLogger(__name__)
 
 
+# Win32_Battery.BatteryStatus values. Status 2 is "AC connected, NOT charging"
+# — either because the battery is deliberately held by an adaptive charging
+# policy (Dell Power Manager, Lenovo Battery Conservation, etc.) or because
+# it's simply full. We classify these two cases apart so a dashboard can
+# distinguish "plugged but paused" from "discharging on battery".
+_WMI_STATUS_CHARGING = {6, 7, 8, 9}
+_WMI_STATUS_AC_NOT_CHARGING = 2
+_WMI_STATUS_FULL = 3
+_WMI_STATUS_DISCHARGING = 1
+_WMI_STATUS_LOW = 4
+_WMI_STATUS_CRITICAL = 5
+
+# Battery level at or above which "AC, not charging" means "full" rather than
+# "adaptive hold". Leaves headroom for adaptive policies that top out at 80-95%.
+_FULL_LEVEL_THRESHOLD = 95
+
+
+def _classify_charge_mode(status_code: int | None, level_percent: float | None) -> str:
+    """Classify the current charge mode from Win32_Battery status + level.
+
+    Returns one of: "charging", "discharging", "ac_idle", "full", "low",
+    "critical", "unknown". "ac_idle" means AC is connected but the charger
+    is not actively pulling current — typically an adaptive charging pause.
+    """
+    if status_code is None:
+        return "unknown"
+    s = int(status_code)
+    if s in _WMI_STATUS_CHARGING:
+        return "charging"
+    if s == _WMI_STATUS_DISCHARGING:
+        return "discharging"
+    if s == _WMI_STATUS_FULL:
+        return "full"
+    if s == _WMI_STATUS_LOW:
+        return "low"
+    if s == _WMI_STATUS_CRITICAL:
+        return "critical"
+    if s == _WMI_STATUS_AC_NOT_CHARGING:
+        if level_percent is not None and level_percent >= _FULL_LEVEL_THRESHOLD:
+            return "full"
+        return "ac_idle"
+    return "unknown"
+
+
 class USBPDCollector(Collector):
     """Collect USB Power Delivery metrics."""
 
@@ -135,9 +179,14 @@ class USBPDCollector(Collector):
             # Check for charging rate via BatteryStatus
             # Status 6-9 = various charging states
             status_code = getattr(bat, "BatteryStatus", None)
+            level = getattr(bat, "EstimatedChargeRemaining", None)
             if status_code is not None:
-                is_charging = int(status_code) in (6, 7, 8, 9)
+                is_charging = int(status_code) in _WMI_STATUS_CHARGING
                 metrics["power.charging"] = metric_value(is_charging)
+                level_pct = float(level) if level is not None else None
+                metrics["power.charge_mode"] = metric_value(
+                    _classify_charge_mode(int(status_code), level_pct)
+                )
 
             # DesignVoltage in millivolts
             voltage = getattr(bat, "DesignVoltage", None)

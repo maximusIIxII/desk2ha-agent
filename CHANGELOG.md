@@ -5,6 +5,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji catego
 
 ## [Unreleased]
 
+### ✨ New features
+- **`power.charge_mode` metric (Windows)**: surfaces Dell Adaptive Charging / Lenovo Battery Conservation pause as a distinct `"ac_idle"` state. Previously `power.charging=false` during adaptive hold was conflated with "on battery, discharging". The new metric classifies `Win32_Battery.BatteryStatus` (+ level threshold) into `"charging" | "discharging" | "ac_idle" | "full" | "low" | "critical" | "unknown"`. The existing `power.charging` boolean is unchanged.
+
 ## [1.4.1] - 2026-04-19
 
 ### 🐛 Bug fixes
