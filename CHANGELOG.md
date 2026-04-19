@@ -5,9 +5,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji catego
 
 ## [Unreleased]
 
+### 🐛 Bug fixes
+- **Helper self-loads its secret from `config.toml`**: the `--config <path>` CLI flag on `desk2ha-helper` / `python -m desk2ha_agent.helper` reads `[helper].secret` and exports it into `DESK2HA_HELPER_SECRET` before the server starts. Removes the need for the unversioned `start-helper.ps1` wrapper that bridged the gap since v1.3.0. The Scheduled Task installer (`scripts/install-helper-service.ps1`) now calls the helper directly with `--config`.
+
 ### 🔧 Improvements
-- **Release-readiness CI workflow**: new `.github/workflows/release-readiness.yml` runs `scripts/predeploy.sh` on every PR + push to main — the same gate the orchestrator enforces at release time. Fixes the cycle where CHANGELOG-empty / `tools/` format drift / security findings only surface mid-release (happened during the v1.4.0 run).
-- **`predeploy.sh` fails loud**: missing `ruff`/`pytest` now exits non-zero instead of printing a warn and continuing. Silent skips let `tools/service-health.py` format drift through to verify-time on v1.4.0.
+- **Scheduled Task installer rewritten**: `scripts/install-helper-service.ps1` now uses `Register-ScheduledTask` (LogonType=Interactive, RunLevel=Highest) instead of NSSM. Required because DDC/CI does not work under LocalSystem / Session 0. Supports `-Python`, `-ConfigPath`, `-LogDir`, `-TaskName` parameters; auto-detects `python.exe` on PATH and defaults the config to the repo root.
+- **Helper CLI tests**: new `tests/unit/helper/test_main.py` covers `--config` / `-c` argument parsing and `_read_secret_from_config` against malformed, empty, and missing TOML.
 
 ## [1.4.0] - 2026-04-18
 

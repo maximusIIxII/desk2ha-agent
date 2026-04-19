@@ -81,17 +81,19 @@ desk2ha-agent --config desk2ha-agent.toml
 
 ## Elevated Helper
 
-Some metrics (e.g. Dell Command Monitor WMI) require admin privileges. The elevated helper runs as a separate process with admin rights and serves metrics via localhost HTTP:
+Some metrics (Dell Command Monitor WMI, DDC/CI) require admin privileges. The elevated helper runs as a separate process with admin rights and serves metrics via localhost HTTP:
 
 ```bash
-# Start manually:
-desk2ha-helper --port 9694
+# Start manually (reads [helper].secret from config.toml):
+desk2ha-helper --config config.toml --log-dir logs
 
-# Or install as Windows service (run as Administrator):
+# Or install as a Windows Scheduled Task (run as Administrator):
 powershell -File scripts/install-helper-service.ps1
 ```
 
-The agent automatically queries the helper at `http://127.0.0.1:9694` if it's running. If not, DCM metrics are simply skipped.
+The task runs in the user's interactive session at logon with Highest run level — DDC/CI needs Session 1+, so a Windows Service under LocalSystem will not work.
+
+The agent automatically queries the helper at `http://127.0.0.1:9694` if it's running, authenticating with the shared bearer token from `[helper].secret`. If the helper is unreachable, elevated metrics are simply skipped.
 
 ## Configuration
 
@@ -172,7 +174,7 @@ The agent needs an interactive desktop session for DDC/CI monitor control. Use t
 %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\Desk2HA Agent.vbs
 ```
 
-The elevated helper can run as a Windows Service (Session 0 is fine for WMI):
+The elevated helper runs as a Scheduled Task in the user's interactive session (required for DDC/CI — Session 0 services cannot access DDC/CI):
 
 ```powershell
 # Run as Administrator:
