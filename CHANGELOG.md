@@ -5,6 +5,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji catego
 
 ## [Unreleased]
 
+### 🐛 Bug fixes
+- **`connected_host` now reliably emitted on peripherals**: the 1s sleep between `scheduler.start()` and the host-identity propagation in `__main__` was racing with the first Windows platform collect (WMI can take 2–5s cold). When the race lost, `get_device_key()` returned `None`, the propagation was silently skipped, and peripheral collectors (Litra, HID++, Dell Secure Link, …) emitted metrics without `connected_host` for the whole agent lifetime. Replaced with a 15s polling loop; logs a warning if the key still doesn't resolve.
+
 ### ✨ New features
 - **`power.charge_mode` metric (Windows)**: surfaces Dell Adaptive Charging / Lenovo Battery Conservation pause as a distinct `"ac_idle"` state. Previously `power.charging=false` during adaptive hold was conflated with "on battery, discharging". The new metric classifies `Win32_Battery.BatteryStatus` (+ level threshold) into `"charging" | "discharging" | "ac_idle" | "full" | "low" | "critical" | "unknown"`. The existing `power.charging` boolean is unchanged.
 
