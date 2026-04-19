@@ -38,6 +38,46 @@ _RECEIVER_PIDS: set[int] = {0x2119, 0x2141, 0xB091}
 # Vendor usage pages for Dell peripherals
 _VENDOR_USAGE_PAGES: set[int] = {0xFF02, 0xFF83}
 
+# Generic Desktop usage page + (keyboard, mouse) usages.  The Secure Link
+# Receiver exposes a separate HID interface per paired class — KB900 maps to
+# 0x01/0x06, MS900 to 0x01/0x02 — regardless of whether the Feature Report
+# channel (0xFF02) yields data.  We use these paths as a reliable presence
+# signal so peripherals always appear in HA even when FK-15 byte offsets
+# don't resolve yet.
+_HID_USAGE_PAGE_GENERIC_DESKTOP = 0x01
+_HID_USAGE_KEYBOARD = 0x06
+_HID_USAGE_MOUSE = 0x02
+
+
+def _detect_paired_classes(receiver_path: bytes, all_devs: list[dict[str, Any]]) -> set[str]:
+    """Return the set of peripheral classes ({"keyboard", "mouse"}) paired
+    behind a given receiver path.
+
+    Secure Link exposes a dedicated HID interface per paired class — same
+    PID, different usage — so we can detect presence without depending on
+    Feature Reports that aren't always populated.
+    """
+    receiver_pid = next(
+        (d.get("product_id", 0) for d in all_devs if d.get("path") == receiver_path),
+        None,
+    )
+    if receiver_pid is None:
+        return set()
+
+    classes: set[str] = set()
+    for d in all_devs:
+        if d.get("product_id") != receiver_pid:
+            continue
+        if d.get("usage_page") != _HID_USAGE_PAGE_GENERIC_DESKTOP:
+            continue
+        usage = d.get("usage", 0)
+        if usage == _HID_USAGE_KEYBOARD:
+            classes.add("keyboard")
+        elif usage == _HID_USAGE_MOUSE:
+            classes.add("mouse")
+    return classes
+
+
 # Auth magic bytes (hypothesis from FK-15 Feinkonzept)
 _AUTH_MAGIC = bytes([0x44, 0x45, 0x4C, 0x4C])  # "DELL"
 
@@ -125,29 +165,64 @@ class DellPeripheralCollector(Collector):
 
         metrics: dict[str, Any] = {}
 
+        # Re-enumerate once per collect so we pick up hot-plug pairings without
+        # requiring an agent restart.  Cheap on Windows (<5 ms typically).
+        try:
+            all_devs = hid.enumerate(_DELL_VID)
+        except Exception:
+            logger.debug("hid.enumerate failed — skipping pairing detection", exc_info=True)
+            all_devs = []
+
         for i, recv in enumerate(self._receivers):
             prefix = f"peripheral.dell_receiver_{i}"
             metrics[f"{prefix}.manufacturer"] = metric_value("Dell")
             metrics[f"{prefix}.model"] = metric_value("Universal Receiver")
             metrics[f"{prefix}.device_type"] = metric_value("receiver")
 
+            # Detect paired peripherals from HID enumeration — works regardless
+            # of whether the vendor Feature Report (0xFF02) channel yields
+            # parseable data.  Before this fix, no kb/mouse sub-entities
+            # appeared in HA whenever the Feature Report was empty or short.
+            paired = _detect_paired_classes(recv["path"], all_devs)
+            kb_prefix = f"peripheral.dell_kb_{i}"
+            ms_prefix = f"peripheral.dell_ms_{i}"
+
+            if "keyboard" in paired:
+                metrics[f"{kb_prefix}.manufacturer"] = metric_value("Dell")
+                metrics[f"{kb_prefix}.model"] = metric_value("Dell Keyboard")
+                metrics[f"{kb_prefix}.device_type"] = metric_value("keyboard")
+            if "mouse" in paired:
+                metrics[f"{ms_prefix}.manufacturer"] = metric_value("Dell")
+                metrics[f"{ms_prefix}.model"] = metric_value("Dell Mouse")
+                metrics[f"{ms_prefix}.device_type"] = metric_value("mouse")
+
+            # Opportunistic Feature-Report enrichment: backlight level, DPI,
+            # battery. Tolerates missing/short reports — the presence entries
+            # above guarantee the devices show up either way.
             try:
                 h = hid.device()
                 h.open_path(recv["path"])
 
-                # Try to read Feature Report from receiver
-                # Report ID 0x01 — device status / paired peripherals
                 report = h.get_feature_report(0x01, 64)
                 if report and len(report) > 6:
-                    # Parse peripheral type from report
                     periph_type_byte = report[3] if len(report) > 3 else 0
                     periph_type = _PERIPHERAL_TYPES.get(periph_type_byte, "unknown")
 
+                    # Presence fallback: if HID enumeration missed the pairing
+                    # (e.g. empty all_devs from a failed hid.enumerate), the
+                    # Feature Report's peripheral-type byte is the next best
+                    # signal. Guarantees keyboards/mice stay visible even if
+                    # the enumeration path degrades.
                     if periph_type in ("keyboard", "combo"):
-                        kb_prefix = f"peripheral.dell_kb_{i}"
-                        metrics[f"{kb_prefix}.manufacturer"] = metric_value("Dell")
-                        metrics[f"{kb_prefix}.device_type"] = metric_value("keyboard")
+                        metrics.setdefault(f"{kb_prefix}.manufacturer", metric_value("Dell"))
+                        metrics.setdefault(f"{kb_prefix}.model", metric_value("Dell Keyboard"))
+                        metrics.setdefault(f"{kb_prefix}.device_type", metric_value("keyboard"))
+                    if periph_type in ("mouse", "combo"):
+                        metrics.setdefault(f"{ms_prefix}.manufacturer", metric_value("Dell"))
+                        metrics.setdefault(f"{ms_prefix}.model", metric_value("Dell Mouse"))
+                        metrics.setdefault(f"{ms_prefix}.device_type", metric_value("mouse"))
 
+                    if periph_type in ("keyboard", "combo") or "keyboard" in paired:
                         bl_offset = _KB_REPORT_MAP.get("backlight_level")
                         if bl_offset and len(report) > bl_offset:
                             bl = report[bl_offset]
@@ -161,11 +236,7 @@ class DellPeripheralCollector(Collector):
                                 float(report[slot_offset])
                             )
 
-                    if periph_type in ("mouse", "combo"):
-                        ms_prefix = f"peripheral.dell_ms_{i}"
-                        metrics[f"{ms_prefix}.manufacturer"] = metric_value("Dell")
-                        metrics[f"{ms_prefix}.device_type"] = metric_value("mouse")
-
+                    if periph_type in ("mouse", "combo") or "mouse" in paired:
                         dpi_offset = _MS_REPORT_MAP.get("dpi")
                         if dpi_offset and len(report) > dpi_offset:
                             dpi_idx = report[dpi_offset]
@@ -176,11 +247,7 @@ class DellPeripheralCollector(Collector):
                     if len(report) > 10:
                         battery = report[10]
                         if 0 < battery <= 100:
-                            target_prefix = (
-                                f"peripheral.dell_kb_{i}"
-                                if periph_type == "keyboard"
-                                else f"peripheral.dell_ms_{i}"
-                            )
+                            target_prefix = kb_prefix if periph_type == "keyboard" else ms_prefix
                             metrics[f"{target_prefix}.battery_level"] = metric_value(
                                 float(battery), unit="%"
                             )
