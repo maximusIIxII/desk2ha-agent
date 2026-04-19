@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji catego
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-04-19
+
 ### 🐛 Bug fixes
 - **Helper self-loads its secret from `config.toml`**: the `--config <path>` CLI flag on `desk2ha-helper` / `python -m desk2ha_agent.helper` reads `[helper].secret` and exports it into `DESK2HA_HELPER_SECRET` before the server starts. Removes the need for the unversioned `start-helper.ps1` wrapper that bridged the gap since v1.3.0. The Scheduled Task installer (`scripts/install-helper-service.ps1`) now calls the helper directly with `--config`.
 
