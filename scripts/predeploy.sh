@@ -39,22 +39,23 @@ if [[ -z "$(echo "$UNRELEASED" | tr -d '[:space:]')" ]]; then
 fi
 echo "[OK] CHANGELOG has [Unreleased] content"
 
-# ── Lint + format
-if command -v ruff &>/dev/null; then
-    ruff check . || { echo "[FAIL] ruff check"; exit 1; }
-    ruff format --check . || { echo "[FAIL] ruff format"; exit 1; }
-    echo "[OK] ruff"
-else
-    echo "[WARN] ruff not on PATH — skipping lint"
+# ── Lint + format (fail, don't skip — silent skips let tools/ format drift
+# ship in v1.4.0 and block the release at verify-time)
+if ! command -v ruff &>/dev/null; then
+    echo "[FAIL] ruff not on PATH — install dev deps: pip install -e \".[dev]\""
+    exit 1
 fi
+ruff check . || { echo "[FAIL] ruff check"; exit 1; }
+ruff format --check . || { echo "[FAIL] ruff format"; exit 1; }
+echo "[OK] ruff"
 
 # ── Tests
-if command -v pytest &>/dev/null; then
-    pytest tests/ -q --tb=short || { echo "[FAIL] pytest"; exit 1; }
-    echo "[OK] pytest"
-else
-    echo "[WARN] pytest not on PATH — skipping tests"
+if ! command -v pytest &>/dev/null; then
+    echo "[FAIL] pytest not on PATH — install dev deps: pip install -e \".[dev]\""
+    exit 1
 fi
+pytest tests/ -q --tb=short || { echo "[FAIL] pytest"; exit 1; }
+echo "[OK] pytest"
 
 # ── Security scan (shared tool)
 if [[ -f "../scripts/security-scan.py" ]]; then
