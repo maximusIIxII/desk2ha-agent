@@ -23,6 +23,24 @@ from desk2ha_agent.state import StateCache
 logger = logging.getLogger("desk2ha_agent")
 
 
+async def _wait_for_device_key(
+    provider: DeviceInfoProvider, timeout: float, poll_interval: float = 0.5
+) -> str | None:
+    """Poll get_device_key() until it returns a value or the timeout elapses.
+
+    Separated so tests can exercise the timing path without spinning up the
+    full scheduler.
+    """
+    deadline = asyncio.get_running_loop().time() + timeout
+    while True:
+        key = provider.get_device_key()
+        if key:
+            return key
+        if asyncio.get_running_loop().time() >= deadline:
+            return None
+        await asyncio.sleep(poll_interval)
+
+
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="desk2ha_agent",
@@ -116,17 +134,26 @@ async def _run(config_path: Path, *, service_mode: bool = False) -> None:
 
     # Start collectors
     await scheduler.start()
-    await asyncio.sleep(1.0)  # Let collectors gather initial data
 
     # Propagate host identity to peripheral collectors for connected_host tracking.
-    # Must happen AFTER first collect cycle because platform collectors resolve
-    # their device_key during collect(), not during setup().
+    # Platform collectors resolve their device_key during collect(), not setup(),
+    # so we poll instead of a fixed sleep: WMI on Windows can take 2–5s cold,
+    # and a single asyncio.sleep(1.0) silently lost the propagation whenever
+    # WMI was slower than the timeout. Without propagation, peripheral
+    # collectors (Litra, HID++, Dell Secure Link, …) emit metrics without
+    # `connected_host`, breaking multi-host tracking in the integration.
     if info_provider is not None:
-        host_key = info_provider.get_device_key()
+        host_key = await _wait_for_device_key(info_provider, timeout=15.0)
         if host_key:
             for c in collectors:
                 c.host_device_key = host_key
             logger.info("Host device key propagated: %s", host_key)
+        else:
+            logger.warning(
+                "Host device key did not resolve within 15s — connected_host "
+                "metrics will be missing. Peripherals stay on the current host "
+                "but roaming detection is disabled."
+            )
 
     # Fleet policy receiver with command executor for enforcement
     from desk2ha_agent.lifecycle.policy import PolicyReceiver

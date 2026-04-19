@@ -5,6 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji catego
 
 ## [Unreleased]
 
+### 🐛 Bug fixes
+- **Dell Secure Link keyboard + mouse visible even when Feature Reports are empty**: the FK-15 collector emitted `peripheral.dell_kb_X` / `peripheral.dell_ms_X` only when Report ID 0x01 returned at least 7 bytes of parseable data. On the live KB900/MS900 behind a 413c:2119 receiver this often yielded `b""`, leaving only `peripheral.dell_receiver_0` in `/v1/info` — the integration card had no Dell keyboard or mouse entries. New: `_detect_paired_classes` enumerates sibling HID interfaces (Generic Desktop usage 0x06/0x02) on the receiver's PID and emits presence metrics regardless of Feature-Report health. Backlight level, DPI, and battery still come from the Feature Report when available.
+- **`connected_host` now reliably emitted on peripherals**: the 1s sleep between `scheduler.start()` and the host-identity propagation in `__main__` was racing with the first Windows platform collect (WMI can take 2–5s cold). When the race lost, `get_device_key()` returned `None`, the propagation was silently skipped, and peripheral collectors (Litra, HID++, Dell Secure Link, …) emitted metrics without `connected_host` for the whole agent lifetime. Replaced with a 15s polling loop; logs a warning if the key still doesn't resolve.
+
+### ✨ New features
+- **`power.charge_mode` metric (Windows)**: surfaces Dell Adaptive Charging / Lenovo Battery Conservation pause as a distinct `"ac_idle"` state. Previously `power.charging=false` during adaptive hold was conflated with "on battery, discharging". The new metric classifies `Win32_Battery.BatteryStatus` (+ level threshold) into `"charging" | "discharging" | "ac_idle" | "full" | "low" | "critical" | "unknown"`. The existing `power.charging` boolean is unchanged.
+
 ## [1.4.1] - 2026-04-19
 
 ### 🐛 Bug fixes
