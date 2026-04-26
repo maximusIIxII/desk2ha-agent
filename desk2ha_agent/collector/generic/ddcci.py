@@ -450,16 +450,49 @@ class DDCCICollector(Collector):
         optional_dependencies=["monitorcontrol"],
     )
 
+    # Number of consecutive empty collects (no live VCP data) before re-probing.
+    # Each tick is ~30-60s (collector interval); 3 ticks = 1.5-3min before self-heal kicks in.
+    SELF_HEAL_THRESHOLD: ClassVar[int] = 3
+
     def __init__(self) -> None:
         self._monitor_ids: list[dict[str, str]] | None = None
         self._use_helper: bool = False
         self._helper_client: Any = None
+        # Counter: consecutive collects that returned no live VCP data
+        # (only registry-cached model/manufacturer). Triggers helper fallback.
+        self._empty_collect_streak: int = 0
+
+    @staticmethod
+    def _ddcci_smoke_test_sync(monitors: list[Any]) -> bool:
+        """Try a real VCP read on at least one monitor.
+
+        ``monitorcontrol.get_monitors()`` returns monitor handles based on the
+        Windows monitor registry, not on actual DDC/CI reachability. Under
+        NSSM/LocalSystem (no desktop session) the handles exist but every VCP
+        read fails. Without this smoke test ``probe()`` returns a false-positive
+        and ``_use_helper`` stays ``False`` — leaving the agent stuck with only
+        registry-cached ``model``/``manufacturer`` and missing brightness,
+        contrast, KVM, input source, etc.
+
+        Returns ``True`` if at least one monitor accepts a VCP read.
+        """
+        for m in monitors:
+            try:
+                with m:
+                    # Cheap, widely-supported VCP feature. Any successful read
+                    # confirms DDC/CI is actually working on this monitor.
+                    m.get_luminance()
+                return True
+            except Exception:
+                continue
+        return False
 
     async def probe(self) -> bool:
-        """Check if monitorcontrol is importable and any monitor exists.
+        """Check if monitorcontrol is importable and any monitor is reachable.
 
         Three modes of operation:
-        - **Direct DDC/CI** — monitors reachable via monitorcontrol
+        - **Direct DDC/CI** — monitors reachable via monitorcontrol AND a VCP
+          smoke-test succeeds
         - **Via helper** — helper process has desktop session and DDC/CI access
         - **Registry fallback** — monitors exist but DDC/CI inaccessible
         """
@@ -476,8 +509,15 @@ class DDCCICollector(Collector):
             try:
                 monitors = await asyncio.to_thread(monitorcontrol.get_monitors)
                 if len(monitors) > 0:
-                    logger.info("DDC/CI: direct access (%d monitors)", len(monitors))
-                    return True
+                    smoke_ok = await asyncio.to_thread(self._ddcci_smoke_test_sync, monitors)
+                    if smoke_ok:
+                        logger.info("DDC/CI: direct access (%d monitors)", len(monitors))
+                        return True
+                    logger.info(
+                        "DDC/CI: get_monitors() returned %d, but VCP smoke-test failed "
+                        "— falling through to helper",
+                        len(monitors),
+                    )
             except Exception:
                 logger.debug("DDC/CI probe: get_monitors() failed", exc_info=True)
 
@@ -526,14 +566,80 @@ class DDCCICollector(Collector):
                 logger.debug("Failed to read monitor identities", exc_info=True)
 
     async def collect(self) -> dict[str, Any]:
-        """Collect DDC/CI metrics (directly or via helper)."""
+        """Collect DDC/CI metrics (directly or via helper).
+
+        Self-healing: if the direct path keeps returning only static
+        registry-cached metadata (no live VCP data) for ``SELF_HEAL_THRESHOLD``
+        consecutive collects, attempt to switch to helper mode. This recovers
+        from the half-init state where ``probe()`` returned True at boot but
+        live monitors were unavailable (e.g. monitor in standby at agent start,
+        or DDC/CI under NSSM/LocalSystem without desktop session).
+        """
         if self._use_helper:
             return await self._collect_via_helper()
         try:
-            return await asyncio.to_thread(self._collect_sync)
+            result = await asyncio.to_thread(self._collect_sync)
         except Exception:
             logger.debug("DDC/CI collection failed", exc_info=True)
-            return {}
+            result = {}
+
+        if self._has_live_vcp_data(result):
+            self._empty_collect_streak = 0
+            return result
+
+        self._empty_collect_streak += 1
+        if self._empty_collect_streak >= self.SELF_HEAL_THRESHOLD:
+            logger.warning(
+                "DDC/CI: %d consecutive empty collects — attempting helper fallback",
+                self._empty_collect_streak,
+            )
+            self._empty_collect_streak = 0  # reset to avoid log spam regardless of outcome
+            switched = await self._try_helper_fallback()
+            if switched:
+                return await self._collect_via_helper()
+
+        return result
+
+    @staticmethod
+    def _has_live_vcp_data(metrics: dict[str, Any]) -> bool:
+        """Return True if metrics contain at least one *live* VCP-derived field.
+
+        ``model`` and ``manufacturer`` are sourced from the registry EDID cache
+        and are NOT proof that DDC/CI is actually working. Live indicators are
+        values that can only come from a real VCP read: brightness, contrast,
+        volume, input source, power_state.
+        """
+        live_suffixes = (
+            ".brightness_percent",
+            ".contrast_percent",
+            ".volume",
+            ".input_source",
+            ".power_state",
+        )
+        return any(k.endswith(live_suffixes) for k in metrics)
+
+    async def _try_helper_fallback(self) -> bool:
+        """Try to switch to helper-based collection. Returns True on success."""
+        try:
+            from desk2ha_agent.helper.client import HelperClient
+
+            if self._helper_client is None:
+                self._helper_client = HelperClient()
+            if await self._helper_client.is_available():
+                metrics = await self._helper_client.get_metrics()
+                if any(k.startswith("display.") for k in metrics):
+                    self._use_helper = True
+                    logger.info(
+                        "DDC/CI: switched to helper mode after self-heal (%d display metrics)",
+                        sum(1 for k in metrics if k.startswith("display.")),
+                    )
+                    return True
+                logger.info("DDC/CI self-heal: helper available but no display metrics yet")
+            else:
+                logger.info("DDC/CI self-heal: helper not reachable")
+        except Exception:
+            logger.debug("DDC/CI self-heal: helper probe failed", exc_info=True)
+        return False
 
     async def _collect_via_helper(self) -> dict[str, Any]:
         """Fetch DDC/CI display metrics from the elevated helper."""
