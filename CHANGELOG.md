@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/) with emoji catego
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-04-27
+
 ### 🐛 Bug fixes
 - **DDC/CI probe no longer false-positives under NSSM/LocalSystem**: `monitorcontrol.get_monitors()` returns monitor handles based on the Windows registry, not on actual DDC/CI reachability. Under NSSM/LocalSystem (no desktop session) — or when the monitor is in standby at agent boot — the handles exist but every VCP read fails. `probe()` would return `True` after only counting handles, so `_use_helper` stayed `False` and the helper was never contacted. The agent then ran in a half-init state for the rest of its lifetime, serving displays with only registry-cached `model`/`manufacturer` (and sometimes `power_state`) — brightness, contrast, volume, input source, and KVM all `unavailable` in HA. New: `_ddcci_smoke_test_sync()` performs a real `monitor.get_luminance()` against each monitor; if all fail, probe falls through to the helper path.
 - **DDC/CI self-heal: collect() switches to helper after empty streak**: even with the smoke-test fix, a monitor that came up between probe and steady-state runs (e.g. resume from sleep) could leave the agent permanently on the direct path. `collect()` now tracks consecutive collects that returned only static registry-cached fields. After `SELF_HEAL_THRESHOLD` (default 3 ≈ 1.5–3 minutes) it attempts a helper handshake and switches mode on success. Recovers automatically from the 2026-04-26 half-init state without operator intervention.
